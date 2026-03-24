@@ -361,9 +361,6 @@ export class DependencyScanner {
                                     }
                                 }
 
-                                // 如果类型为空且是 net，默认为 wire
-                                if (isNet && !type) type = 'wire';
-
                                 // 端口名
                                 const portIdNode = findChild(decl, 'port_identifier');
                                 if (portIdNode) {
