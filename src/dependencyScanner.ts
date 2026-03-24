@@ -188,7 +188,14 @@ export class DependencyScanner {
     }
 
     private async addOrUpdateFile(file: string, useRegex: boolean) {
-        const content = await readFile(file, 'utf8');
+        let content = await readFile(file, 'utf8');
+        // 预处理：将 static_assert 和 $error 行替换为注释
+        if (!useRegex && this.parser) {
+            // 匹配行首任意空白后跟 static_assert 或 $error，直到分号结束（包含可能的多行？）
+            // 这里简化：替换单行，假设 static_assert 和 $error 不跨行（Verilog 允许跨行，但较少见）
+            content = content.replace(/^\s*static_assert\s*\([^;]*\)\s*;/gm, '// static_assert(...)');
+            content = content.replace(/^\s*\$error\s*\([^;]*\)\s*;/gm, '// $error(...)');
+        }
         const modulesInFile: ModuleInfo[] = [];
         const instancesInFile: { instanceName: string; moduleName: string; owner: string }[] = [];
 
