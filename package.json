@@ -227,6 +227,16 @@
                     "type": "string",
                     "default": ".vscode",
                     "description": "Directory relative to workspace root to store cache files."
+                },
+                "verilog.lint.clearBeforeLint": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Clear previous lint results before each lint run."
+                },
+                "verilog.lint.crossFileDiagnostics": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Show diagnostics for all files mentioned in lint output, not just the current one."
                 }
             }
         },

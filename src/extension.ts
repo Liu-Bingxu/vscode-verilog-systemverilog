@@ -278,6 +278,8 @@ async function lintDocument(document: vscode.TextDocument) {
     const verilatorPath = config.get<string>('path', 'verilator');
     const extraArgs = config.get<string[]>('lint.arguments', ['-Wall']);
     const includePaths = config.get<string[]>('includePath', []);
+    const clearBeforeLint = config.get<boolean>('lint.clearBeforeLint', true);
+    const crossFileDiagnostics = config.get<boolean>('lint.crossFileDiagnostics', true);
 
     const includeArgs = includePaths.map(p => `-I${p}`);
     const fileName = document.fileName;
@@ -289,16 +291,134 @@ async function lintDocument(document: vscode.TextDocument) {
     try {
         const { stdout, stderr } = await execPromise(command, { cwd: fileDir });
         const output = stdout + '\n' + stderr;
-        const diagnostics = parseVerilatorOutput(output, document);
-        diagnosticCollection.set(document.uri, diagnostics);
+        const uriToRawDiags = parseVerilatorOutput(output);
+
+        // 如果启用清除，则根据配置决定删除哪些诊断
+        if (clearBeforeLint) {
+            if (crossFileDiagnostics) {
+                diagnosticCollection.clear();
+            } else {
+                diagnosticCollection.delete(document.uri);
+            }
+        }
+
+        // 构建精确 range 的诊断映射
+        const uriToDiagnostics = new Map<vscode.Uri, vscode.Diagnostic[]>();
+        for (const [uri, rawDiags] of uriToRawDiags) {
+            if (!crossFileDiagnostics && uri.toString() !== document.uri.toString()) {
+                continue; // 跳过非当前文件
+            }
+            try {
+                const doc = await vscode.workspace.openTextDocument(uri);
+                const diags: vscode.Diagnostic[] = [];
+                for (const raw of rawDiags) {
+                    let range: vscode.Range;
+                    if (raw.line >= 0 && raw.line < doc.lineCount) {
+                        const lineText = doc.lineAt(raw.line).text;
+                        let startChar = raw.column;
+                        let endChar = startChar + 1;
+                        if (startChar < 0 || startChar >= lineText.length) {
+                            startChar = 0;
+                            endChar = 0;
+                        } else {
+                            endChar = Math.min(endChar, lineText.length);
+                        }
+                        range = new vscode.Range(raw.line, startChar, raw.line, endChar);
+                    } else {
+                        // 行号无效，回退到文档开头
+                        range = new vscode.Range(0, 0, 0, 0);
+                    }
+                    const diagnostic = new vscode.Diagnostic(range, raw.message, raw.severity);
+                    diagnostic.source = 'verilator';
+                    diagnostic.code = raw.code;
+                    diags.push(diagnostic);
+                }
+                uriToDiagnostics.set(uri, diags);
+            } catch (err) {
+                // 无法读取文件，使用简单 range（仅行号）
+                console.warn(`Cannot read ${uri.toString()}, using fallback range`);
+                const diags: vscode.Diagnostic[] = [];
+                for (const raw of rawDiags) {
+                    const range = new vscode.Range(raw.line, raw.column, raw.line, raw.column + 1);
+                    const diagnostic = new vscode.Diagnostic(range, raw.message, raw.severity);
+                    diagnostic.source = 'verilator';
+                    diagnostic.code = raw.code;
+                    diags.push(diagnostic);
+                }
+                uriToDiagnostics.set(uri, diags);
+            }
+        }
+
+        // 批量设置诊断
+        for (const [uri, diags] of uriToDiagnostics) {
+            diagnosticCollection.set(uri, diags);
+        }
     } catch (error: any) {
         if (error.stdout || error.stderr) {
             const output = (error.stdout || '') + '\n' + (error.stderr || '');
-            const diagnostics = parseVerilatorOutput(output, document);
-            diagnosticCollection.set(document.uri, diagnostics);
+            const uriToRawDiags = parseVerilatorOutput(output);
+            if (clearBeforeLint) {
+                if (crossFileDiagnostics) {
+                    diagnosticCollection.clear();
+                } else {
+                    diagnosticCollection.delete(document.uri);
+                }
+            }
+            // 同上，构建精确诊断
+            const uriToDiagnostics = new Map<vscode.Uri, vscode.Diagnostic[]>();
+            for (const [uri, rawDiags] of uriToRawDiags) {
+                if (!crossFileDiagnostics && uri.toString() !== document.uri.toString()) {
+                    continue;
+                }
+                try {
+                    const doc = await vscode.workspace.openTextDocument(uri);
+                    const diags: vscode.Diagnostic[] = [];
+                    for (const raw of rawDiags) {
+                        let range: vscode.Range;
+                        if (raw.line >= 0 && raw.line < doc.lineCount) {
+                            const lineText = doc.lineAt(raw.line).text;
+                            let startChar = raw.column;
+                            let endChar = startChar + 1;
+                            if (startChar < 0 || startChar >= lineText.length) {
+                                startChar = 0;
+                                endChar = 0;
+                            } else {
+                                endChar = Math.min(endChar, lineText.length);
+                            }
+                            range = new vscode.Range(raw.line, startChar, raw.line, endChar);
+                        } else {
+                            range = new vscode.Range(0, 0, 0, 0);
+                        }
+                        const diagnostic = new vscode.Diagnostic(range, raw.message, raw.severity);
+                        diagnostic.source = 'verilator';
+                        diagnostic.code = raw.code;
+                        diags.push(diagnostic);
+                    }
+                    uriToDiagnostics.set(uri, diags);
+                } catch (err) {
+                    const diags: vscode.Diagnostic[] = [];
+                    for (const raw of rawDiags) {
+                        const range = new vscode.Range(raw.line, raw.column, raw.line, raw.column + 1);
+                        const diagnostic = new vscode.Diagnostic(range, raw.message, raw.severity);
+                        diagnostic.source = 'verilator';
+                        diagnostic.code = raw.code;
+                        diags.push(diagnostic);
+                    }
+                    uriToDiagnostics.set(uri, diags);
+                }
+            }
+            for (const [uri, diags] of uriToDiagnostics) {
+                diagnosticCollection.set(uri, diags);
+            }
         } else {
             vscode.window.showErrorMessage(`Verilator lint failed: ${error.message}`);
-            diagnosticCollection.delete(document.uri);
+            if (clearBeforeLint) {
+                if (crossFileDiagnostics) {
+                    diagnosticCollection.clear();
+                } else {
+                    diagnosticCollection.delete(document.uri);
+                }
+            }
         }
     }
 }
@@ -317,8 +437,16 @@ function execPromise(command: string, options: { cwd?: string }): Promise<{ stdo
     });
 }
 
-function parseVerilatorOutput(output: string, document: vscode.TextDocument): vscode.Diagnostic[] {
-    const diagnostics: vscode.Diagnostic[] = [];
+interface RawDiagnostic {
+    severity: vscode.DiagnosticSeverity;
+    message: string;
+    code?: string;
+    line: number;
+    column: number;
+}
+
+function parseVerilatorOutput(output: string): Map<vscode.Uri, RawDiagnostic[]> {
+    const uriToRawDiags = new Map<vscode.Uri, RawDiagnostic[]>();
     const lines = output.split('\n');
     const regex = /^(%[A-Za-z\-]+):\s*([^:]+):(\d+)(?::(\d+))?:\s*(.*)$/;
 
@@ -328,8 +456,7 @@ function parseVerilatorOutput(output: string, document: vscode.TextDocument): vs
 
         const [, severityStr, filePath, lineStr, colStr, message] = match;
         const lineNum = parseInt(lineStr, 10) - 1;
-
-        if (filePath !== document.fileName) continue;
+        const colNum = colStr ? parseInt(colStr, 10) - 1 : 0;
 
         let severity: vscode.DiagnosticSeverity;
         if (severityStr.startsWith('%Error') || severityStr.startsWith('%Fatal')) {
@@ -344,22 +471,20 @@ function parseVerilatorOutput(output: string, document: vscode.TextDocument): vs
         const codeMatch = severityStr.match(/%[A-Za-z]+-([A-Z0-9_]+)/);
         if (codeMatch) code = codeMatch[1];
 
-        let range: vscode.Range;
-        if (colStr) {
-            const colNum = parseInt(colStr, 10) - 1;
-            const lineText = document.lineAt(lineNum).text;
-            range = new vscode.Range(lineNum, colNum, lineNum, lineText.length);
-        } else {
-            range = new vscode.Range(lineNum, 0, lineNum, document.lineAt(lineNum).text.length);
+        const uri = vscode.Uri.file(filePath);
+        if (!uriToRawDiags.has(uri)) {
+            uriToRawDiags.set(uri, []);
         }
-
-        const diagnostic = new vscode.Diagnostic(range, message, severity);
-        diagnostic.source = 'verilator';
-        diagnostic.code = code;
-        diagnostics.push(diagnostic);
+        uriToRawDiags.get(uri)!.push({
+            severity,
+            message,
+            code,
+            line: lineNum,
+            column: colNum
+        });
     }
 
-    return diagnostics;
+    return uriToRawDiags;
 }
 
 async function instantiateModuleWithScanner(scanner: DependencyScanner) {
