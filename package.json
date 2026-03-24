@@ -16,6 +16,23 @@
         "Linters"
     ],
     "main": "./out/extension.js",
+    "activationEvents": [
+        "onLanguage:verilog",
+        "onLanguage:systemverilog",
+        "onView:verilog.moduleTree",
+        "onView:verilog.simTree",
+        "onView:verilog.socTree",
+        "onCommand:verilog.refreshModuleTree",
+        "onCommand:verilog.refreshSimTree",
+        "onCommand:verilog.refreshSocTree",
+        "onCommand:verilog.setAsTopSrc",
+        "onCommand:verilog.setAsTopSim",
+        "onCommand:verilog.setAsTopSoc",
+        "onCommand:verilog.instantiateSrcModule",
+        "onCommand:verilog.instantiateSimModule",
+        "onCommand:verilog.instantiateSocModule",
+        "onCommand:verilog.lintCurrentFile"
+    ],
     "contributes": {
         "languages": [
             {
