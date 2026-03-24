@@ -446,26 +446,26 @@ export class DependencyScanner {
                 }
 
                 // 接口实例化（checker_instantiation）
-                if (node.type === 'checker_instantiation' && (currentModule || currentPackage)) {
-                    const ifaceNode = findChild(node, 'checker_identifier');
-                    const nameOfInstance = findChild(node, 'name_of_instance');
-                    let instanceName = '';
-                    if (nameOfInstance) {
-                        const idNode = findChild(nameOfInstance, 'instance_identifier');
-                        if (idNode) {
-                            const simple = findChild(idNode, 'simple_identifier');
-                            if (simple) instanceName = simple.text;
-                        }
-                    }
-                    if (ifaceNode) {
-                        const simpleId = findChild(ifaceNode, 'simple_identifier');
-                        if (simpleId) {
-                            const ifaceName = simpleId.text;
-                            const owner = currentModule || currentPackage!;
-                            instancesInFile.push({ instanceName, moduleName: ifaceName, owner });
-                        }
-                    }
-                }
+                // if (node.type === 'checker_instantiation' && (currentModule || currentPackage)) {
+                //     const ifaceNode = findChild(node, 'checker_identifier');
+                //     const nameOfInstance = findChild(node, 'name_of_instance');
+                //     let instanceName = '';
+                //     if (nameOfInstance) {
+                //         const idNode = findChild(nameOfInstance, 'instance_identifier');
+                //         if (idNode) {
+                //             const simple = findChild(idNode, 'simple_identifier');
+                //             if (simple) instanceName = simple.text;
+                //         }
+                //     }
+                //     if (ifaceNode) {
+                //         const simpleId = findChild(ifaceNode, 'simple_identifier');
+                //         if (simpleId) {
+                //             const ifaceName = simpleId.text;
+                //             const owner = currentModule || currentPackage!;
+                //             instancesInFile.push({ instanceName, moduleName: ifaceName, owner });
+                //         }
+                //     }
+                // }
 
                 // 包导入
                 if (node.type === 'package_import_declaration' && (currentModule || currentPackage)) {
