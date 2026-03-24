@@ -3,6 +3,11 @@
     "displayName": "Verilog/SystemVerilog Full Support",
     "description": "Syntax highlighting, snippets, and Verilator lint for Verilog and SystemVerilog",
     "version": "0.4.0",
+    "publisher": "LiuBingxu",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Liu-Bingxu/vscode-verilog-systemverilog.git"
+    },
     "engines": {
         "vscode": "^1.85.0"
     },
