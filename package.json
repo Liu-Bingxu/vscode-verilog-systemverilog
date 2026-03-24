@@ -1,0 +1,331 @@
+{
+    "name": "vscode-verilog-full",
+    "displayName": "Verilog/SystemVerilog Full Support",
+    "description": "Syntax highlighting, snippets, and Verilator lint for Verilog and SystemVerilog",
+    "version": "0.4.0",
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": [
+        "Programming Languages",
+        "Linters"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "languages": [
+            {
+                "id": "verilog",
+                "aliases": [
+                    "Verilog",
+                    "verilog"
+                ],
+                "extensions": [
+                    ".v",
+                    ".vh",
+                    ".vl"
+                ],
+                "configuration": "./language-configuration.json"
+            },
+            {
+                "id": "systemverilog",
+                "aliases": [
+                    "SystemVerilog",
+                    "systemverilog"
+                ],
+                "extensions": [
+                    ".sv",
+                    ".svh",
+                    ".svi"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "verilog",
+                "scopeName": "source.systemverilog",
+                "path": "./syntaxes/verilog.tmLanguage.json"
+            },
+            {
+                "language": "systemverilog",
+                "scopeName": "source.systemverilog",
+                "path": "./syntaxes/systemverilog.tmLanguage.json"
+            }
+        ],
+        "snippets": [
+            {
+                "language": "verilog",
+                "path": "./snippets/verilog.json"
+            },
+            {
+                "language": "systemverilog",
+                "path": "./snippets/systemverilog.json"
+            }
+        ],
+        "commands": [
+            {
+                "command": "verilog.lintCurrentFile",
+                "title": "Verilog: Lint Current File"
+            },
+            {
+                "command": "verilog.refreshModuleTree",
+                "title": "Refresh Module Tree",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "verilog.refreshSimTree",
+                "title": "Refresh Simulation Tree",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "verilog.refreshSocTree",
+                "title": "Refresh SoC Tree",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "verilog.setAsTopSrc",
+                "title": "Set as Top for Source file"
+            },
+            {
+                "command": "verilog.setAsTopSim",
+                "title": "Set as Top for Simulation"
+            },
+            {
+                "command": "verilog.setAsTopSoc",
+                "title": "Set as Top for SoC"
+            },
+            {
+                "command": "verilog.instantiateSrcModule",
+                "title": "Verilog: Instantiate Module (Source)",
+                "icon": "$(code)"
+            },
+            {
+                "command": "verilog.instantiateSimModule",
+                "title": "Verilog: Instantiate Module (Simulation)",
+                "icon": "$(code)"
+            },
+            {
+                "command": "verilog.instantiateSocModule",
+                "title": "Verilog: Instantiate Module (SoC)",
+                "icon": "$(code)"
+            }
+        ],
+        "configuration": {
+            "title": "Verilog Lint",
+            "properties": {
+                "verilog.path": {
+                    "type": "string",
+                    "default": "verilator",
+                    "description": "Path to the Verilator executable"
+                },
+                "verilog.includePath": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [],
+                    "description": "List of include directories (-I)"
+                },
+                "verilog.lint.arguments": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [
+                        "-Wall"
+                    ],
+                    "description": "Additional arguments for Verilator"
+                },
+                "verilog.lint.enable": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable lint on save/type"
+                },
+                "verilog.lint.run": {
+                    "type": "string",
+                    "enum": [
+                        "onSave",
+                        "onType"
+                    ],
+                    "default": "onSave",
+                    "description": "When to run lint"
+                },
+                "verilog.projectFolder": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [],
+                    "description": "List of project root directories (relative to workspace root). Leave empty to use workspace root."
+                },
+                "verilog.srcFolders": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "default": [],
+                    "description": "List of root directories for source files (src view)."
+                },
+                "verilog.simFolders": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "default": [],
+                    "description": "List of root directories for simulation files (sim view)."
+                },
+                "verilog.socFolders": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "default": [],
+                    "description": "List of root directories for SoC files (soc view)."
+                },
+                "verilog.dependencyScanInterval": {
+                    "type": "number",
+                    "default": 1000,
+                    "description": "Interval (ms) for scanning dependencies. Default 1000ms."
+                },
+                "verilog.dependencyScanEnable": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable/disable module dependency scanning."
+                },
+                "verilog.dependencyScan.useRegex": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Force using regex for dependency scanning (fallback if tree-sitter fails)"
+                },
+                "verilog.dependencyCache.enable": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable saving dependency cache to file."
+                },
+                "verilog.dependencyCache.askBeforeCreate": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Ask before creating cache file if it doesn't exist."
+                },
+                "verilog.dependencyCache.directory": {
+                    "type": "string",
+                    "default": ".vscode",
+                    "description": "Directory relative to workspace root to store cache files."
+                }
+            }
+        },
+        "configurationDefaults": {
+            "editor.tokenColorCustomizations": {
+                "textMateRules": [
+                    {
+                        "scope": "constant.other.net.systemverilog",
+                        "settings": {
+                            "foreground": "#D4BFFF"
+                        }
+                    }
+                ]
+            }
+        },
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "verilog-dependency",
+                    "title": "Verilog",
+                    "icon": "$(circuit-board)"
+                }
+            ]
+        },
+        "views": {
+            "verilog-dependency": [
+                {
+                    "id": "verilog.moduleTree",
+                    "name": "Module Dependencies",
+                    "icon": "$(circuit-board)"
+                },
+                {
+                    "id": "verilog.simTree",
+                    "name": "Simulation Files",
+                    "icon": "$(circuit-board)"
+                },
+                {
+                    "id": "verilog.socTree",
+                    "name": "SoC Files",
+                    "icon": "$(circuit-board)"
+                }
+            ]
+        },
+        "menus": {
+            "view/title": [
+                {
+                    "command": "verilog.refreshModuleTree",
+                    "when": "view == verilog.moduleTree",
+                    "group": "navigation"
+                },
+                {
+                    "command": "verilog.refreshSimTree",
+                    "when": "view == verilog.simTree",
+                    "group": "navigation"
+                },
+                {
+                    "command": "verilog.refreshSocTree",
+                    "when": "view == verilog.socTree",
+                    "group": "navigation"
+                },
+                {
+                    "command": "verilog.instantiateSrcModule",
+                    "when": "view == verilog.moduleTree",
+                    "group": "navigation"
+                },
+                {
+                    "command": "verilog.instantiateSimModule",
+                    "when": "view == verilog.simTree",
+                    "group": "navigation"
+                },
+                {
+                    "command": "verilog.instantiateSocModule",
+                    "when": "view == verilog.socTree",
+                    "group": "navigation"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "verilog.setAsTopSrc",
+                    "when": "view == verilog.moduleTree && viewItem == moduleNode:top",
+                    "group": "1_commands"
+                },
+                {
+                    "command": "verilog.setAsTopSim",
+                    "when": "view == verilog.simTree && viewItem == moduleNode:top",
+                    "group": "1_commands"
+                },
+                {
+                    "command": "verilog.setAsTopSoc",
+                    "when": "view == verilog.socTree && viewItem == moduleNode:top",
+                    "group": "1_commands"
+                },
+                {
+                    "command": "verilog.instantiateSrcModule",
+                    "when": "editorLangId == verilog || editorLangId == systemverilog",
+                    "group": "1_commands"
+                },
+                {
+                    "command": "verilog.instantiateSimModule",
+                    "when": "editorLangId == verilog || editorLangId == systemverilog",
+                    "group": "1_commands"
+                },
+                {
+                    "command": "verilog.instantiateSocModule",
+                    "when": "editorLangId == verilog || editorLangId == systemverilog",
+                    "group": "1_commands"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./"
+    },
+    "devDependencies": {
+        "@types/node": "^20.x",
+        "@types/vscode": "^1.85.0",
+        "typescript": "^5.3.3"
+    },
+    "dependencies": {
+        "web-tree-sitter": "^0.26.7"
+    }
+}

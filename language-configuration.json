@@ -1,0 +1,51 @@
+{
+    "comments": {
+        "lineComment": "//",
+        "blockComment": ["/*", "*/"]
+    },
+    "brackets": [
+        ["{", "}"],
+        ["[", "]"],
+        ["(", ")"],
+        ["begin", "end"],
+        ["case", "endcase"],
+        ["module", "endmodule"],
+        ["class", "endclass"],
+        ["interface", "endinterface"],
+        ["package", "endpackage"],
+        ["program", "endprogram"],
+        ["function", "endfunction"],
+        ["task", "endtask"],
+        ["generate", "endgenerate"],
+        ["property", "endproperty"],
+        ["sequence", "endsequence"],
+        ["checker", "endchecker"],
+        ["specify", "endspecify"],
+        ["config", "endconfig"],
+        ["fork", "join"],
+        ["clocking", "endclocking"],
+        ["constraint", "endconstraint"]
+    ],
+    "autoClosingPairs": [
+        { "open": "{", "close": "}" },
+        { "open": "[", "close": "]" },
+        { "open": "(", "close": ")" },
+        { "open": "\"", "close": "\"", "notIn": ["string"] },
+        { "open": "'", "close": "'", "notIn": ["string", "comment"] },
+        { "open": "/*", "close": "*/", "notIn": ["string"] }
+    ],
+    "surroundingPairs": [
+        ["{", "}"],
+        ["[", "]"],
+        ["(", ")"],
+        ["\"", "\""],
+        ["'", "'"]
+    ],
+    "folding": {
+        "markers": {
+            "start": "^\\s*//\\s*#region\\b",
+            "end": "^\\s*//\\s*#endregion\\b"
+        }
+    }
+}
+
