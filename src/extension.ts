@@ -302,55 +302,75 @@ async function lintDocument(document: vscode.TextDocument) {
             }
         }
 
-        // 构建精确 range 的诊断映射
-        const uriToDiagnostics = new Map<vscode.Uri, vscode.Diagnostic[]>();
+        // 使用文件路径作为键，合并同一文件的所有诊断
+        const pathToDiagnostics = new Map<string, vscode.Diagnostic[]>();
         for (const [uri, rawDiags] of uriToRawDiags) {
-            if (!crossFileDiagnostics && uri.toString() !== document.uri.toString()) {
-                continue; // 跳过非当前文件
+            const filePath = uri.fsPath;
+            if (!crossFileDiagnostics && filePath !== document.uri.fsPath) continue;
+
+            let diags = pathToDiagnostics.get(filePath);
+            if (!diags) {
+                diags = [];
+                pathToDiagnostics.set(filePath, diags);
             }
-            try {
-                const doc = await vscode.workspace.openTextDocument(uri);
-                const diags: vscode.Diagnostic[] = [];
-                for (const raw of rawDiags) {
-                    let range: vscode.Range;
-                    if (raw.line >= 0 && raw.line < doc.lineCount) {
+
+            // 为当前文件缓存打开的文档
+            let doc: vscode.TextDocument | null = null;
+
+            for (const raw of rawDiags) {
+                let range: vscode.Range;
+
+                // 优先使用消息中提取的标识符长度
+                if (raw.symbol && raw.symbol.length > 0) {
+                    let startChar = raw.column;
+                    let endChar = startChar + raw.symbol.length;
+                    // 简单修正负列号
+                    if (startChar < 0) startChar = 0;
+                    range = new vscode.Range(raw.line, startChar, raw.line, endChar);
+                } else {
+                    // 没有符号信息，需要读取文件进行单词扩展
+                    if (!doc) {
+                        try {
+                            doc = await vscode.workspace.openTextDocument(uri);
+                        } catch (err) {
+                            console.warn(`Cannot open ${uri.toString()}, using fallback range`);
+                        }
+                    }
+                    if (doc && raw.line >= 0 && raw.line < doc.lineCount) {
                         const lineText = doc.lineAt(raw.line).text;
                         let startChar = raw.column;
-                        let endChar = startChar + 1;
-                        if (startChar < 0 || startChar >= lineText.length) {
-                            startChar = 0;
-                            endChar = 0;
+                        if (startChar < 0) startChar = 0;
+                        if (startChar >= lineText.length) startChar = lineText.length - 1;
+
+                        // 尝试扩展至完整标识符
+                        if (/[a-zA-Z0-9_]/.test(lineText[startChar])) {
+                            let left = startChar;
+                            while (left > 0 && /[a-zA-Z0-9_]/.test(lineText[left - 1])) left--;
+                            let right = startChar;
+                            while (right < lineText.length && /[a-zA-Z0-9_]/.test(lineText[right])) right++;
+                            startChar = left;
+                            const endChar = right;
+                            range = new vscode.Range(raw.line, startChar, raw.line, endChar);
                         } else {
-                            endChar = Math.min(endChar, lineText.length);
+                            const endChar = Math.min(startChar + 1, lineText.length);
+                            range = new vscode.Range(raw.line, startChar, raw.line, endChar);
                         }
-                        range = new vscode.Range(raw.line, startChar, raw.line, endChar);
                     } else {
-                        // 行号无效，回退到文档开头
-                        range = new vscode.Range(0, 0, 0, 0);
+                        // 无法读取文件或行号无效，回退到单个字符
+                        range = new vscode.Range(raw.line, raw.column, raw.line, raw.column + 1);
                     }
-                    const diagnostic = new vscode.Diagnostic(range, raw.message, raw.severity);
-                    diagnostic.source = 'verilator';
-                    diagnostic.code = raw.code;
-                    diags.push(diagnostic);
                 }
-                uriToDiagnostics.set(uri, diags);
-            } catch (err) {
-                // 无法读取文件，使用简单 range（仅行号）
-                console.warn(`Cannot read ${uri.toString()}, using fallback range`);
-                const diags: vscode.Diagnostic[] = [];
-                for (const raw of rawDiags) {
-                    const range = new vscode.Range(raw.line, raw.column, raw.line, raw.column + 1);
-                    const diagnostic = new vscode.Diagnostic(range, raw.message, raw.severity);
-                    diagnostic.source = 'verilator';
-                    diagnostic.code = raw.code;
-                    diags.push(diagnostic);
-                }
-                uriToDiagnostics.set(uri, diags);
+
+                const diagnostic = new vscode.Diagnostic(range, raw.message, raw.severity);
+                diagnostic.source = 'verilator';
+                diagnostic.code = raw.code;
+                diags.push(diagnostic);
             }
         }
 
-        // 批量设置诊断
-        for (const [uri, diags] of uriToDiagnostics) {
+        // 设置诊断
+        for (const [filePath, diags] of pathToDiagnostics) {
+            const uri = vscode.Uri.file(filePath);
             diagnosticCollection.set(uri, diags);
         }
     } catch (error: any) {
@@ -365,49 +385,74 @@ async function lintDocument(document: vscode.TextDocument) {
                 }
             }
             // 同上，构建精确诊断
-            const uriToDiagnostics = new Map<vscode.Uri, vscode.Diagnostic[]>();
+            const pathToDiagnostics = new Map<string, vscode.Diagnostic[]>();
             for (const [uri, rawDiags] of uriToRawDiags) {
-                if (!crossFileDiagnostics && uri.toString() !== document.uri.toString()) {
-                    continue;
+                const filePath = uri.fsPath;
+                if (!crossFileDiagnostics && filePath !== document.uri.fsPath) continue;
+
+                let diags = pathToDiagnostics.get(filePath);
+                if (!diags) {
+                    diags = [];
+                    pathToDiagnostics.set(filePath, diags);
                 }
-                try {
-                    const doc = await vscode.workspace.openTextDocument(uri);
-                    const diags: vscode.Diagnostic[] = [];
-                    for (const raw of rawDiags) {
-                        let range: vscode.Range;
-                        if (raw.line >= 0 && raw.line < doc.lineCount) {
+
+                // 为当前文件缓存打开的文档
+                let doc: vscode.TextDocument | null = null;
+
+                for (const raw of rawDiags) {
+                    let range: vscode.Range;
+
+                    // 优先使用消息中提取的标识符长度
+                    if (raw.symbol && raw.symbol.length > 0) {
+                        let startChar = raw.column;
+                        let endChar = startChar + raw.symbol.length;
+                        // 简单修正负列号
+                        if (startChar < 0) startChar = 0;
+                        range = new vscode.Range(raw.line, startChar, raw.line, endChar);
+                    } else {
+                        // 没有符号信息，需要读取文件进行单词扩展
+                        if (!doc) {
+                            try {
+                                doc = await vscode.workspace.openTextDocument(uri);
+                            } catch (err) {
+                                console.warn(`Cannot open ${uri.toString()}, using fallback range`);
+                            }
+                        }
+                        if (doc && raw.line >= 0 && raw.line < doc.lineCount) {
                             const lineText = doc.lineAt(raw.line).text;
                             let startChar = raw.column;
-                            let endChar = startChar + 1;
-                            if (startChar < 0 || startChar >= lineText.length) {
-                                startChar = 0;
-                                endChar = 0;
+                            if (startChar < 0) startChar = 0;
+                            if (startChar >= lineText.length) startChar = lineText.length - 1;
+
+                            // 尝试扩展至完整标识符
+                            if (/[a-zA-Z0-9_]/.test(lineText[startChar])) {
+                                let left = startChar;
+                                while (left > 0 && /[a-zA-Z0-9_]/.test(lineText[left - 1])) left--;
+                                let right = startChar;
+                                while (right < lineText.length && /[a-zA-Z0-9_]/.test(lineText[right])) right++;
+                                startChar = left;
+                                const endChar = right;
+                                range = new vscode.Range(raw.line, startChar, raw.line, endChar);
                             } else {
-                                endChar = Math.min(endChar, lineText.length);
+                                const endChar = Math.min(startChar + 1, lineText.length);
+                                range = new vscode.Range(raw.line, startChar, raw.line, endChar);
                             }
-                            range = new vscode.Range(raw.line, startChar, raw.line, endChar);
                         } else {
-                            range = new vscode.Range(0, 0, 0, 0);
+                            // 无法读取文件或行号无效，回退到单个字符
+                            range = new vscode.Range(raw.line, raw.column, raw.line, raw.column + 1);
                         }
-                        const diagnostic = new vscode.Diagnostic(range, raw.message, raw.severity);
-                        diagnostic.source = 'verilator';
-                        diagnostic.code = raw.code;
-                        diags.push(diagnostic);
                     }
-                    uriToDiagnostics.set(uri, diags);
-                } catch (err) {
-                    const diags: vscode.Diagnostic[] = [];
-                    for (const raw of rawDiags) {
-                        const range = new vscode.Range(raw.line, raw.column, raw.line, raw.column + 1);
-                        const diagnostic = new vscode.Diagnostic(range, raw.message, raw.severity);
-                        diagnostic.source = 'verilator';
-                        diagnostic.code = raw.code;
-                        diags.push(diagnostic);
-                    }
-                    uriToDiagnostics.set(uri, diags);
+
+                    const diagnostic = new vscode.Diagnostic(range, raw.message, raw.severity);
+                    diagnostic.source = 'verilator';
+                    diagnostic.code = raw.code;
+                    diags.push(diagnostic);
                 }
             }
-            for (const [uri, diags] of uriToDiagnostics) {
+
+            // 设置诊断
+            for (const [filePath, diags] of pathToDiagnostics) {
+                const uri = vscode.Uri.file(filePath);
                 diagnosticCollection.set(uri, diags);
             }
         } else {
@@ -443,6 +488,7 @@ interface RawDiagnostic {
     code?: string;
     line: number;
     column: number;
+    symbol?: string;   // 从消息中提取的标识符
 }
 
 function parseVerilatorOutput(output: string): Map<vscode.Uri, RawDiagnostic[]> {
@@ -471,6 +517,14 @@ function parseVerilatorOutput(output: string): Map<vscode.Uri, RawDiagnostic[]> 
         const codeMatch = severityStr.match(/%[A-Za-z]+-([A-Z0-9_]+)/);
         if (codeMatch) code = codeMatch[1];
 
+        // 提取最后一个单引号内的内容作为标识符
+        let symbol: string | undefined;
+        const quotedMatches = message.match(/'([^']+)'/g);
+        if (quotedMatches && quotedMatches.length > 0) {
+            const lastQuoted = quotedMatches[quotedMatches.length - 1];
+            symbol = lastQuoted.slice(1, -1);
+        }
+
         const uri = vscode.Uri.file(filePath);
         if (!uriToRawDiags.has(uri)) {
             uriToRawDiags.set(uri, []);
@@ -480,7 +534,8 @@ function parseVerilatorOutput(output: string): Map<vscode.Uri, RawDiagnostic[]> 
             message,
             code,
             line: lineNum,
-            column: colNum
+            column: colNum,
+            symbol
         });
     }
 
