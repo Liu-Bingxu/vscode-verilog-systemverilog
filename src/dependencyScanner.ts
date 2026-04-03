@@ -449,6 +449,28 @@ export class DependencyScanner {
                     }
                 }
 
+                // 接口实例化（广义，包括模块实例化带参数的情况）
+                if (node.type === 'interface_instantiation' && (currentModule || currentPackage)) {
+                    const moduleNameNode = findChild(node, 'interface_identifier');
+                    const hierarchical = findChild(node, 'hierarchical_instance');
+                    let instanceName = '';
+                    if (hierarchical) {
+                        const nameNode = findChild(hierarchical, 'name_of_instance');
+                        if (nameNode) {
+                            const idNode = findChild(nameNode, 'instance_identifier');
+                            if (idNode) {
+                                const simple = findChild(idNode, 'simple_identifier');
+                                if (simple) instanceName = simple.text;
+                            }
+                        }
+                    }
+                    if (moduleNameNode) {
+                        const moduleName = moduleNameNode.text;
+                        const owner = currentModule || currentPackage!;
+                        instancesInFile.push({ instanceName, moduleName, owner });
+                    }
+                }
+
                 // 接口实例化（checker_instantiation）
                 // if (node.type === 'checker_instantiation' && (currentModule || currentPackage)) {
                 //     const ifaceNode = findChild(node, 'checker_identifier');
