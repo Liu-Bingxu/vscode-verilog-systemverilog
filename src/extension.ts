@@ -39,6 +39,15 @@ const defaultDescription = 'No additional description available.';
 export function activate(context: vscode.ExtensionContext) {
     console.log('Verilog Lint extension activated');
 
+    const colorProvider = vscode.languages.registerColorProvider(
+        ['verilog', 'systemverilog'],
+        {
+            provideDocumentColors: () => [],
+            provideColorPresentations: () => []
+        }
+    );
+    context.subscriptions.push(colorProvider);
+
     const config = vscode.workspace.getConfiguration('verilog');
     const cacheEnable = config.get<boolean>('dependencyCache.enable', true);
     const askBeforeCreate = config.get<boolean>('dependencyCache.askBeforeCreate', true);
