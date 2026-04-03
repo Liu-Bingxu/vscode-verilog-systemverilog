@@ -301,6 +301,15 @@ async function lintDocument(document: vscode.TextDocument) {
     const clearBeforeLint = config.get<boolean>('lint.clearBeforeLint', true);
     const crossFileDiagnostics = config.get<boolean>('lint.crossFileDiagnostics', true);
 
+    // 清除旧诊断（根据配置）
+    if (clearBeforeLint) {
+        if (crossFileDiagnostics) {
+            diagnosticCollection.clear();
+        } else {
+            diagnosticCollection.delete(document.uri);
+        }
+    }
+
     const includeArgs = includePaths.map(p => `-I${p}`);
     const fileName = document.fileName;
     const fileDir = path.dirname(fileName);
@@ -414,15 +423,6 @@ async function lintDocument(document: vscode.TextDocument) {
             uriToDiagnostics.set(key, []);
         }
         uriToDiagnostics.get(key)!.push(diagnostic);
-    }
-
-    // 清除旧诊断（根据配置）
-    if (clearBeforeLint) {
-        if (crossFileDiagnostics) {
-            diagnosticCollection.clear();
-        } else {
-            diagnosticCollection.delete(document.uri);
-        }
     }
 
     // 设置新诊断
