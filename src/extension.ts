@@ -584,9 +584,10 @@ function generateInstantiation(moduleInfo: ModuleInfo, fileType: string, cursorO
     // ---------- 构建最终代码 ----------
     const lines: string[] = [];
 
-    // localparam 声明
+    // localparam 声明 - 使用默认值
     for (const param of parameters) {
-        lines.push(`${indent}localparam ${param.name} = ${param.name};`);
+        const defaultValue = param.default || param.name;
+        lines.push(`${indent}localparam ${param.name} = ${defaultValue};`);
     }
     if (parameters.length > 0) lines.push('');
 
