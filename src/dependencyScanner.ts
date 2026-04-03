@@ -558,7 +558,12 @@ export class DependencyScanner {
         return definitions;
     }
 
-    async scan() {
+    // 添加 forceScan 方法
+    async forceScan() {
+        await this.scan(true);
+    }
+
+    async scan(force: boolean = false) {
         const config = vscode.workspace.getConfiguration('verilog');
         const useRegex = config.get<boolean>('dependencyScan.useRegex', false);
 
@@ -619,40 +624,48 @@ export class DependencyScanner {
         }
         const files = Array.from(allFiles);
 
-        const currentFiles = new Map<string, number>();
-        for (const file of files) {
-            try {
-                const stat = await fs.promises.stat(file);
-                currentFiles.set(file, stat.mtimeMs);
-            } catch (err) {
-                // ignore
+        if (!force) {
+            const currentFiles = new Map<string, number>();
+            for (const file of files) {
+                try {
+                    const stat = await fs.promises.stat(file);
+                    currentFiles.set(file, stat.mtimeMs);
+                } catch (err) {
+                    // ignore
+                }
             }
-        }
 
-        const deletedFiles: string[] = [];
-        const changedFiles: string[] = [];
-        for (const [file, info] of this.fileInfoMap) {
-            if (!currentFiles.has(file)) {
-                deletedFiles.push(file);
-            } else if (currentFiles.get(file) !== info.mtime) {
-                changedFiles.push(file);
+            const deletedFiles: string[] = [];
+            const changedFiles: string[] = [];
+            for (const [file, info] of this.fileInfoMap) {
+                if (!currentFiles.has(file)) {
+                    deletedFiles.push(file);
+                } else if (currentFiles.get(file) !== info.mtime) {
+                    changedFiles.push(file);
+                }
             }
-        }
-        const addedFiles = Array.from(currentFiles.keys()).filter(file => !this.fileInfoMap.has(file));
+            const addedFiles = Array.from(currentFiles.keys()).filter(file => !this.fileInfoMap.has(file));
 
-        if (deletedFiles.length === 0 && changedFiles.length === 0 && addedFiles.length === 0) {
-            return;
-        }
+            if (deletedFiles.length === 0 && changedFiles.length === 0 && addedFiles.length === 0) {
+                return;
+            }
 
-        for (const file of deletedFiles) {
-            this.removeFile(file);
-        }
-        for (const file of changedFiles) {
-            this.removeFile(file);
-            await this.addOrUpdateFile(file, useRegex);
-        }
-        for (const file of addedFiles) {
-            await this.addOrUpdateFile(file, useRegex);
+            for (const file of deletedFiles) {
+                this.removeFile(file);
+            }
+            for (const file of changedFiles) {
+                this.removeFile(file);
+                await this.addOrUpdateFile(file, useRegex);
+            }
+            for (const file of addedFiles) {
+                await this.addOrUpdateFile(file, useRegex);
+            }
+        } else {
+            // 强制全量扫描：清空现有信息，重新添加所有文件
+            this.fileInfoMap.clear();
+            for (const file of files) {
+                await this.addOrUpdateFile(file, useRegex);
+            }
         }
 
         const modules = new Map<string, ModuleInfo>();

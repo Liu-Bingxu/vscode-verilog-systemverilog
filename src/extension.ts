@@ -80,9 +80,18 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(moduleTree, simTree, socTree);
 
     // 刷新命令
-    const refreshCmd = vscode.commands.registerCommand('verilog.refreshModuleTree', () => moduleTreeProvider.refresh());
-    const refreshSim = vscode.commands.registerCommand('verilog.refreshSimTree', () => simTreeProvider.refresh());
-    const refreshSoc = vscode.commands.registerCommand('verilog.refreshSocTree', () => socTreeProvider.refresh());
+    const refreshCmd = vscode.commands.registerCommand('verilog.refreshModuleTree', async () => {
+        await srcScanner.forceScan();
+        moduleTreeProvider.refresh();
+    });
+    const refreshSim = vscode.commands.registerCommand('verilog.refreshSimTree', async () => {
+        await simScanner.forceScan();
+        simTreeProvider.refresh();
+    });
+    const refreshSoc = vscode.commands.registerCommand('verilog.refreshSocTree', async () => {
+        await socScanner.forceScan();
+        socTreeProvider.refresh();
+    });
     context.subscriptions.push(refreshCmd, refreshSim, refreshSoc);
 
     // 设置顶层模块命令
