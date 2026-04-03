@@ -336,6 +336,50 @@
 		"body": "genvar $1",
 		"description": "genvar i"
 	},
+    "Generate For Loop": {
+        "prefix": "genfor",
+        "body": [
+            "generate",
+            "    for (genvar ${1:i} = 0; ${1:i} < ${2:N}; ${1:i} = ${1:i} + 1) begin : gen_${3:name}",
+            "        ${4:// code}",
+            "    end",
+            "endgenerate"
+        ],
+        "description": "Generate for loop"
+    },
+    "Generate If": {
+        "prefix": "genif",
+        "body": [
+            "generate",
+            "    if (${1:condition}) begin : gen_${2:name}",
+            "        ${3:// code}",
+            "    end",
+            "    else if (${4:condition}) begin : gen_${5:name}",
+            "        ${6:// code}",
+            "    end",
+            "    else begin : gen_${7:name}",
+            "        ${8:// code}",
+            "    end",
+            "endgenerate"
+        ],
+        "description": "Generate if-else"
+    },
+    "Generate Case": {
+        "prefix": "gencase",
+        "body": [
+            "generate",
+            "    case (${1:expression})",
+            "        ${2:value}: begin : gen_${3:name}",
+            "            ${4:// code}",
+            "        end",
+            "        default: begin : gen_default",
+            "            ${5:// code}",
+            "        end",
+            "    endcase",
+            "endgenerate"
+        ],
+        "description": "Generate case statement"
+    },
 	"testbench template": {
 		"prefix": ["tb", "testbench"],
 		"body": [
