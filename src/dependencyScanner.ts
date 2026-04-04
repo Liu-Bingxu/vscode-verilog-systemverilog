@@ -493,6 +493,28 @@ export class DependencyScanner {
                     }
                 }
 
+                // 程序实例化（当作模块实例化处理）
+                if (node.type === 'program_instantiation' && (currentModule || currentPackage)) {
+                    const moduleNameNode = findChild(node, 'program_identifier');
+                    const hierarchical = findChild(node, 'hierarchical_instance');
+                    let instanceName = '';
+                    if (hierarchical) {
+                        const nameNode = findChild(hierarchical, 'name_of_instance');
+                        if (nameNode) {
+                            const idNode = findChild(nameNode, 'instance_identifier');
+                            if (idNode) {
+                                const simple = findChild(idNode, 'simple_identifier');
+                                if (simple) instanceName = simple.text;
+                            }
+                        }
+                    }
+                    if (moduleNameNode) {
+                        const moduleName = moduleNameNode.text;
+                        const owner = currentModule || currentPackage!;
+                        instancesInFile.push({ instanceName, moduleName, owner });
+                    }
+                }
+
                 // 包导入
                 if (node.type === 'package_import_declaration' && (currentModule || currentPackage)) {
                     const packageItem = findChild(node, 'package_import_item');
