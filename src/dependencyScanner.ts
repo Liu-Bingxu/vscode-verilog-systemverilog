@@ -767,10 +767,13 @@ export class DependencyScanner {
     }
 
     private detectCycles() {
+        const config = vscode.workspace.getConfiguration('verilog');
+        const ignoreList = config.get<string[]>('dependencyCycle.ignoreSelfInstantiation', []);
         const graph: Map<string, string[]> = new Map();
         for (const [mod, info] of this.modules) {
             const deps = info.instances
                 .filter(i => i.instanceName !== 'import')
+                .filter(i => !(i.moduleName === mod && ignoreList.includes(mod)))  // 忽略白名单中的自实例化
                 .map(i => i.moduleName);
             graph.set(mod, deps);
         }

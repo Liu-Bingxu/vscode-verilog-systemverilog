@@ -182,21 +182,35 @@
                 },
                 "verilog.srcFolders": {
                     "type": "array",
-                    "items": { "type": "string" },
+                    "items": {
+                        "type": "string"
+                    },
                     "default": [],
                     "description": "List of root directories for source files (src view)."
                 },
                 "verilog.simFolders": {
                     "type": "array",
-                    "items": { "type": "string" },
+                    "items": {
+                        "type": "string"
+                    },
                     "default": [],
                     "description": "List of root directories for simulation files (sim view)."
                 },
                 "verilog.socFolders": {
                     "type": "array",
-                    "items": { "type": "string" },
+                    "items": {
+                        "type": "string"
+                    },
                     "default": [],
                     "description": "List of root directories for SoC files (soc view)."
+                },
+                "verilog.dependencyCycle.ignoreSelfInstantiation": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [],
+                    "description": "List of module names for which self-instantiation should be ignored (e.g., recursive generate modules)."
                 },
                 "verilog.dependencyScanInterval": {
                     "type": "number",
