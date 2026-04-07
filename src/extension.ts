@@ -14,6 +14,17 @@ let srcScanner: DependencyScanner;
 let simScanner: DependencyScanner;
 let socScanner: DependencyScanner;
 
+// 创建输出通道
+let outputChannel: vscode.OutputChannel;
+
+// 日志函数：同时写入输出通道和控制台
+function log(message: string) {
+    if (outputChannel) {
+        outputChannel.appendLine(message);
+    }
+    console.log(message);
+}
+
 // 错误代码描述映射
 const codeDescriptions: Map<string, string> = new Map([
     ['WIDTH', 'Width mismatch: Check bit widths of expressions.'],
@@ -37,7 +48,10 @@ const codeDescriptions: Map<string, string> = new Map([
 const defaultDescription = 'No additional description available.';
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('Verilog Lint extension activated');
+    // 创建输出通道
+    outputChannel = vscode.window.createOutputChannel('Verilog Extension');
+    context.subscriptions.push(outputChannel);
+    log('Verilog Lint extension activated');
 
     const colorProvider = vscode.languages.registerColorProvider(
         ['verilog', 'systemverilog'],
@@ -57,9 +71,9 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(diagnosticCollection);
 
     // 创建三个扫描器
-    srcScanner = new DependencyScanner(context, 'src');
-    simScanner = new DependencyScanner(context, 'sim');
-    socScanner = new DependencyScanner(context, 'soc');
+    srcScanner = new DependencyScanner(context, 'src', log);
+    simScanner = new DependencyScanner(context, 'sim', log);
+    socScanner = new DependencyScanner(context, 'soc', log);
 
     // 创建树视图提供者
     const moduleTreeProvider = new ModuleTreeProvider(srcScanner, 'module', context);
@@ -150,9 +164,9 @@ export function activate(context: vscode.ExtensionContext) {
                 try {
                     const data = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
                     scanner.loadCache(data);
-                    console.log(`Loaded cache for ${suffix} scanner`);
+                    log(`Loaded cache for ${suffix} scanner`);
                 } catch (err) {
-                    console.error(`Failed to load cache for ${suffix}:`, err);
+                    log(`Parser initialization failed for ${suffix}: ${err}`);
                 }
             } else if (askBeforeCreate) {
                 // 询问是否创建缓存文件
@@ -186,7 +200,7 @@ export function activate(context: vscode.ExtensionContext) {
                 const data = scanner.getCacheData();
                 fs.writeFileSync(cacheFile, JSON.stringify(data, null, 2), 'utf8');
             } catch (err) {
-                console.error(`Failed to save cache for ${suffix}:`, err);
+                log(`Failed to save cache for ${suffix}: ${err}`);
             }
         });
     };

@@ -4,8 +4,6 @@ import * as path from 'path';
 import { promisify } from 'util';
 const readFile = promisify(fs.readFile);
 
-let parserInstance: any = null;
-
 async function initParser() {
     try {
         const treeSitter = await import('web-tree-sitter');
@@ -22,7 +20,7 @@ async function initParser() {
     } catch (err) {
         console.error('Failed to initialize tree-sitter parser:', err);
         vscode.window.showWarningMessage('Dependency scanner will use fallback regex parsing.');
-        return null;
+        throw err;
     }
 }
 
@@ -75,18 +73,20 @@ export class DependencyScanner {
     private parserReady: Promise<void> | null = null;
     private startRequested: boolean = false;
     private viewType: string;
+    private logger?: (msg: string) => void;
 
-    constructor(private context: vscode.ExtensionContext, viewType: string) {
+    constructor(private context: vscode.ExtensionContext, viewType: string, logger?: (msg: string) => void) {
         this.viewType = viewType;
+        this.logger = logger;
         this.duplicateDiagnosticCollection = vscode.languages.createDiagnosticCollection(`verilog-duplicate-${viewType}`);
         this.duplicateOutputChannel = vscode.window.createOutputChannel(`Verilog Duplicate Definitions (${viewType})`);
         this.cycleOutputChannel = vscode.window.createOutputChannel(`Verilog Cyclic Dependencies (${viewType})`);
         this.parserReady = initParser().then(p => {
             this.parser = p;
-            console.log(`Tree-sitter parser initialized for ${viewType} dependency scanning`);
+            this.logger?.(`Tree-sitter parser initialized for ${viewType} dependency scanning`);
             if (this.startRequested) this.doStart();
         }).catch(err => {
-            console.error(`Parser initialization failed for ${viewType}:`, err);
+            this.logger?.(`Parser initialization failed for ${viewType}: ${err}`);
             if (this.startRequested) this.doStart();
         });
     }
