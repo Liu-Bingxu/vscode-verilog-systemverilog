@@ -50,3 +50,6 @@ coverage/
 # Optional: keep only necessary files
 .idea/
 *.iml
+
+# Grammar volatiles
+*.wasm

@@ -1,0 +1,3 @@
+[submodule "tree-sitter-verilog"]
+	path = tree-sitter-verilog
+	url = https://github.com/Liu-Bingxu/tree-sitter-verilog

@@ -11,7 +11,7 @@ async function initParser() {
         const treeSitter = await import('web-tree-sitter');
         await treeSitter.Parser.init();
         const ParserClass = treeSitter;
-        const wasmPath = path.join(__dirname, '..', 'syntaxes', 'tree-sitter-verilog.wasm');
+        const wasmPath = path.join(__dirname, '..', 'tree-sitter-verilog', 'tree-sitter-verilog.wasm');
         if (!fs.existsSync(wasmPath)) {
             throw new Error(`WASM file not found at ${wasmPath}`);
         }

@@ -1,0 +1,13 @@
+# 默认忽略
+.vscode/
+.git/
+src/
+*.vsix
+.gitignore
+.gitmodule
+.vscodeignore
+perf-test.js
+
+# 忽略 tree-sitter-verilog 子模块中除 .wasm 外的所有内容
+tree-sitter-verilog/**
+!tree-sitter-verilog/tree-sitter-verilog.wasm
