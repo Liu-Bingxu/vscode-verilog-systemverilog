@@ -84,12 +84,16 @@ export function createHoverProvider(
                                     const dataTypeNode = findChild(portHeader, 'data_type');
                                     if (dataTypeNode) {
                                         const intVec = findChild(dataTypeNode, 'integer_vector_type');
+                                        const self_type = findChild(dataTypeNode, 'simple_identifier');
                                         if (intVec) type = intVec.text;
+                                        else if (self_type) type = self_type.text;
                                         const dim = findChild(dataTypeNode, 'packed_dimension');
                                         if (dim) packedWidth = dim.text;
                                     }
                                 } else {
+                                    const self_type = findChild(portHeader, 'net_port_type1');
                                     type = 'wire';
+                                    if (self_type) type = self_type.text;
                                     const dim = findChild(portHeader, 'packed_dimension');
                                     if (dim) packedWidth = dim.text;
                                 }
