@@ -8,6 +8,7 @@ import { DependencyScanner, ModuleInfo } from './dependencyScanner';
 import { ModuleTreeProvider, ModuleTreeNode } from './moduleTreeProvider';
 import { Parser } from 'web-tree-sitter';
 import { VerilogDocumentSymbolProvider } from './documentSymbolProvider';
+import { createHoverProvider } from './hoverProvider';
 
 
 let diagnosticCollection: vscode.DiagnosticCollection;
@@ -299,6 +300,12 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     context.subscriptions.push(hoverProvider);
 
+    // 在 activate 中注册 hover provider
+    const variablehoverProvider = createHoverProvider(parserInstance, srcScanner, simScanner, socScanner);
+    context.subscriptions.push(
+        vscode.languages.registerHoverProvider(['verilog', 'systemverilog'], variablehoverProvider)
+    );
+
     // 文档事件
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument(document => {
@@ -387,7 +394,7 @@ async function lintDocument(document: vscode.TextDocument) {
         return;
     } finally {
         // 清理临时文件
-        await fsPromises.unlink(sarifFile).catch(() => {});
+        await fsPromises.unlink(sarifFile).catch(() => { });
     }
 
     // 解析 results
