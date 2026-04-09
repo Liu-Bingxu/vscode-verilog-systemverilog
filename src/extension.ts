@@ -6,6 +6,8 @@ import * as path from 'path';
 import * as os from 'os';
 import { DependencyScanner, ModuleInfo } from './dependencyScanner';
 import { ModuleTreeProvider, ModuleTreeNode } from './moduleTreeProvider';
+import { Parser } from 'web-tree-sitter';
+import { VerilogDocumentSymbolProvider } from './documentSymbolProvider';
 
 
 let diagnosticCollection: vscode.DiagnosticCollection;
@@ -47,7 +49,21 @@ const codeDescriptions: Map<string, string> = new Map([
 
 const defaultDescription = 'No additional description available.';
 
-export function activate(context: vscode.ExtensionContext) {
+let parser: any = null;
+
+async function getParser(): Promise<Parser> {
+    if (parser) return parser;
+    // 复用 dependencyScanner 中的初始化逻辑，或独立初始化
+    const treeSitter = await import('web-tree-sitter');
+    await treeSitter.Parser.init();
+    const wasmPath = path.join(__dirname, '..', 'tree-sitter-verilog', 'tree-sitter-verilog.wasm');
+    const Verilog = await treeSitter.Language.load(wasmPath);
+    parser = new treeSitter.Parser();
+    parser.setLanguage(Verilog);
+    return parser;
+}
+
+export async function activate(context: vscode.ExtensionContext) {
     // 创建输出通道
     outputChannel = vscode.window.createOutputChannel('Verilog Extension');
     context.subscriptions.push(outputChannel);
@@ -61,6 +77,16 @@ export function activate(context: vscode.ExtensionContext) {
         }
     );
     context.subscriptions.push(colorProvider);
+
+    // 注册文档符号提供器
+    const parserInstance = await getParser();
+    const symbolProvider = new VerilogDocumentSymbolProvider(parserInstance);
+    context.subscriptions.push(
+        vscode.languages.registerDocumentSymbolProvider(
+            ['verilog', 'systemverilog'],
+            symbolProvider
+        )
+    );
 
     const config = vscode.workspace.getConfiguration('verilog');
     const cacheEnable = config.get<boolean>('dependencyCache.enable', true);
