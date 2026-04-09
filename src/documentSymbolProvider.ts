@@ -28,10 +28,6 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
             return node.children?.find((c: any) => c.type === type);
         };
 
-        const findChildren = (node: any, type: string): any[] => {
-            return node.children?.filter((c: any) => c.type === type) || [];
-        };
-
         const nodeToRange = (node: any): vscode.Range => {
             if (!node) return new vscode.Range(0, 0, 0, 0);
             return new vscode.Range(
@@ -56,7 +52,7 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
             let range: vscode.Range | undefined;
             let selectionRange: vscode.Range | undefined;
 
-            // 模块声明
+            // 1. 模块声明
             if (node.type === 'module_declaration') {
                 symbolKind = vscode.SymbolKind.Module;
                 const header = findChild(node, 'module_header');
@@ -67,7 +63,7 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
                 range = nodeToRange(node);
                 selectionRange = nodeToRange(findChild(node, 'module_header') || node);
             }
-            // 接口声明
+            // 2. 接口声明
             else if (node.type === 'interface_declaration') {
                 symbolKind = vscode.SymbolKind.Interface;
                 const ansiHeader = findChild(node, 'interface_ansi_header');
@@ -81,7 +77,7 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
                 range = nodeToRange(node);
                 selectionRange = nodeToRange(node);
             }
-            // 包声明
+            // 3. 包声明
             else if (node.type === 'package_declaration') {
                 symbolKind = vscode.SymbolKind.Package;
                 const nameNode = findChild(node, 'package_identifier');
@@ -92,7 +88,7 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
                 range = nodeToRange(node);
                 selectionRange = nodeToRange(node);
             }
-            // 任务声明
+            // 4. 任务声明
             else if (node.type === 'task_declaration') {
                 symbolKind = vscode.SymbolKind.Method;
                 const body = findChild(node, 'task_body_declaration');
@@ -106,7 +102,7 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
                 range = nodeToRange(node);
                 selectionRange = nodeToRange(node);
             }
-            // 函数声明
+            // 5. 函数声明
             else if (node.type === 'function_declaration') {
                 symbolKind = vscode.SymbolKind.Function;
                 const body = findChild(node, 'function_body_declaration');
@@ -120,7 +116,7 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
                 range = nodeToRange(node);
                 selectionRange = nodeToRange(node);
             }
-            // 模块实例化
+            // 6. 模块实例化（包括 program_instantiation）
             else if ((node.type === 'module_instantiation' || node.type === 'program_instantiation') && parentSymbol) {
                 symbolKind = vscode.SymbolKind.Object;
                 const hierarchical = findChild(node, 'hierarchical_instance');
@@ -138,7 +134,7 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
                 range = nodeToRange(node);
                 selectionRange = nodeToRange(node);
             }
-            // 接口实例化
+            // 7. 接口实例化
             else if (node.type === 'interface_instantiation' && parentSymbol) {
                 symbolKind = vscode.SymbolKind.Object;
                 const hierarchical = findChild(node, 'hierarchical_instance');
@@ -156,7 +152,7 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
                 range = nodeToRange(node);
                 selectionRange = nodeToRange(node);
             }
-            // 断言检查器实例化
+            // 8. 断言检查器实例化
             else if (node.type === 'checker_instantiation' && parentSymbol) {
                 symbolKind = vscode.SymbolKind.Object;
                 const nameOfInstance = findChild(node, 'name_of_instance');
@@ -171,7 +167,7 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
                 range = nodeToRange(node);
                 selectionRange = nodeToRange(node);
             }
-            // 包导入声明
+            // 9. 包导入声明
             else if (node.type === 'package_import_declaration' && parentSymbol) {
                 symbolKind = vscode.SymbolKind.Package;
                 const packageItem = findChild(node, 'package_import_item');
@@ -186,7 +182,7 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
                 range = nodeToRange(node);
                 selectionRange = nodeToRange(node);
             }
-            // 端口声明（作为模块的子符号）
+            // 10. 端口声明（作为模块的子符号）
             else if (node.type === 'ansi_port_declaration' && parentSymbol && parentSymbol.kind === vscode.SymbolKind.Module) {
                 symbolKind = vscode.SymbolKind.Field;
                 const portIdNode = findChild(node, 'port_identifier');
@@ -197,57 +193,115 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
                 range = nodeToRange(node);
                 selectionRange = nodeToRange(node);
             }
-            // 参数声明（作为模块的子符号）
-            else if ((node.type === 'parameter_declaration' || node.type === 'local_parameter_declaration') && parentSymbol && parentSymbol.kind === vscode.SymbolKind.Module) {
-                symbolKind = vscode.SymbolKind.Variable;
-                const paramAssigns = findChildren(node, 'param_assignment');
-                for (const assign of paramAssigns) {
-                    const nameNode = findChild(assign, 'parameter_identifier');
-                    if (nameNode) {
-                        const simpleId = findChild(nameNode, 'simple_identifier');
-                        if (simpleId) {
-                            name = simpleId.text;
-                            break;
+            // 11. 参数声明（包括模块头部参数和内部 parameter_declaration / local_parameter_declaration）
+            else if ((node.type === 'parameter_declaration' || node.type === 'local_parameter_declaration') && parentSymbol) {
+                if (parentSymbol.kind === vscode.SymbolKind.Module || parentSymbol.kind === vscode.SymbolKind.Namespace) {
+                    const listNode = findChild(node, 'list_of_param_assignments');
+                    if (listNode) {
+                        const paramAssigns = listNode.children.filter((c: any) => c.type === 'param_assignment');
+                        for (const assign of paramAssigns) {
+                            const nameNode = findChild(assign, 'parameter_identifier');
+                            if (nameNode) {
+                                const simpleId = findChild(nameNode, 'simple_identifier');
+                                if (simpleId) {
+                                    const symName = simpleId.text;
+                                    const symKind = vscode.SymbolKind.Variable;
+                                    const symRange = nodeToRange(node);
+                                    const symSelection = nodeToRange(simpleId);
+                                    const symbol = new vscode.DocumentSymbol(symName, '', symKind, symRange, symSelection);
+                                    parentSymbol.children.push(symbol);
+                                }
+                            }
                         }
                     }
+                    // 不递归子节点，避免重复
+                    return;
                 }
-                range = nodeToRange(node);
-                selectionRange = nodeToRange(node);
             }
-            // 数据声明（wire/reg/logic，可作为模块的子符号）
-            else if (node.type === 'data_declaration' && parentSymbol && parentSymbol.kind === vscode.SymbolKind.Module) {
-                symbolKind = vscode.SymbolKind.Variable;
-                const decls = findChildren(node, 'variable_decl_assignment');
-                for (const decl of decls) {
-                    const nameNode = findChild(decl, 'simple_identifier');
-                    if (nameNode) {
-                        name = nameNode.text;
-                        break;
+            // 12. 数据声明（wire/reg/logic，可作为模块或 generate 块的子符号）
+            else if (node.type === 'data_declaration' && parentSymbol) {
+                if (parentSymbol.kind === vscode.SymbolKind.Module || parentSymbol.kind === vscode.SymbolKind.Namespace) {
+                    const listNode = findChild(node, 'list_of_variable_decl_assignments');
+                    if (listNode) {
+                        const decls = listNode.children.filter((c: any) => c.type === 'variable_decl_assignment');
+                        for (const decl of decls) {
+                            const nameNode = findChild(decl, 'simple_identifier');
+                            if (nameNode) {
+                                const symName = nameNode.text;
+                                const symKind = vscode.SymbolKind.Variable;
+                                const symRange = nodeToRange(node);
+                                const symSelection = nodeToRange(nameNode);
+                                const symbol = new vscode.DocumentSymbol(symName, '', symKind, symRange, symSelection);
+                                parentSymbol.children.push(symbol);
+                            }
+                        }
                     }
+                    // 不递归子节点
+                    return;
                 }
-                range = nodeToRange(node);
-                selectionRange = nodeToRange(node);
             }
-            // generate 区域（作为模块的子符号）
+            // 13. genvar 声明
+            else if (node.type === 'genvar_declaration' && parentSymbol) {
+                if (parentSymbol.kind === vscode.SymbolKind.Module || parentSymbol.kind === vscode.SymbolKind.Namespace) {
+                    const listNode = findChild(node, 'list_of_genvar_identifiers');
+                    if (listNode) {
+                        const ids = listNode.children.filter((c: any) => c.type === 'genvar_identifier');
+                        for (const idNode of ids) {
+                            const simpleId = findChild(idNode, 'simple_identifier');
+                            if (simpleId) {
+                                const symName = simpleId.text;
+                                const symKind = vscode.SymbolKind.Variable;
+                                const symRange = nodeToRange(node);
+                                const symSelection = nodeToRange(simpleId);
+                                const symbol = new vscode.DocumentSymbol(symName, '', symKind, symRange, symSelection);
+                                parentSymbol.children.push(symbol);
+                            }
+                        }
+                    }
+                    // 不递归子节点
+                    return;
+                }
+            }
+            // 14. 自定义类型声明（net_declaration）
+            else if (node.type === 'net_declaration' && parentSymbol) {
+                if (parentSymbol.kind === vscode.SymbolKind.Module || parentSymbol.kind === vscode.SymbolKind.Namespace) {
+                    const listNode = findChild(node, 'list_of_net_decl_assignments');
+                    if (listNode) {
+                        const decls = listNode.children.filter((c: any) => c.type === 'net_decl_assignment');
+                        for (const decl of decls) {
+                            const nameNode = findChild(decl, 'simple_identifier');
+                            if (nameNode) {
+                                const symName = nameNode.text;
+                                const symKind = vscode.SymbolKind.Variable;
+                                const symRange = nodeToRange(node);
+                                const symSelection = nodeToRange(nameNode);
+                                const symbol = new vscode.DocumentSymbol(symName, '', symKind, symRange, symSelection);
+                                parentSymbol.children.push(symbol);
+                            }
+                        }
+                    }
+                    // 不递归子节点
+                    return;
+                }
+            }
+            // 15. generate 区域
             else if (node.type === 'generate_region' && parentSymbol && parentSymbol.kind === vscode.SymbolKind.Module) {
                 symbolKind = vscode.SymbolKind.Namespace;
                 name = 'generate';
                 range = nodeToRange(node);
                 selectionRange = nodeToRange(node);
-                // 创建符号，然后递归子节点，但需要特殊处理 generate_block 使其成为直接子符号
                 const generateSymbol = new vscode.DocumentSymbol(name, '', symbolKind, range, selectionRange);
                 if (parentSymbol) {
                     parentSymbol.children.push(generateSymbol);
                 } else {
                     symbols.push(generateSymbol);
                 }
-                // 递归子节点，但将 generateSymbol 作为父符号，这样所有内部有标签的 generate_block 都会成为它的子符号
                 for (const child of node.children) {
                     visit(child, generateSymbol);
                 }
-                return; // 不再继续递归，因为已经手动递归
+                return;
             }
-            // generate_block 节点：仅当有标签时创建符号（作为当前父符号的子符号）
+            // 16. generate_block（有标签的）
             else if (node.type === 'generate_block') {
                 const label = getGenerateBlockLabel(node);
                 if (label) {
@@ -256,15 +310,13 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
                     range = nodeToRange(node);
                     selectionRange = nodeToRange(node);
                 } else {
-                    // 没有标签的 generate_block 不创建符号，但需要递归其子节点（父符号不变）
+                    // 无标签的 generate_block 不创建符号，但继续递归
                     for (const child of node.children) {
                         visit(child, parentSymbol);
                     }
                     return;
                 }
             }
-            // 注意：不处理 loop_generate_construct、if_generate_construct、case_generate_construct 节点，
-            // 它们会通过递归子节点（generate_block）来创建符号。
 
             if (symbolKind !== undefined && name && range && selectionRange) {
                 const symbol = new vscode.DocumentSymbol(name, '', symbolKind, range, selectionRange);
@@ -273,12 +325,10 @@ export class VerilogDocumentSymbolProvider implements vscode.DocumentSymbolProvi
                 } else {
                     symbols.push(symbol);
                 }
-                // 递归子节点，新符号作为父符号
                 for (const child of node.children) {
                     visit(child, symbol);
                 }
             } else {
-                // 继续递归，保持父符号不变
                 for (const child of node.children) {
                     visit(child, parentSymbol);
                 }
