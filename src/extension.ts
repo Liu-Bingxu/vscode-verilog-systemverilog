@@ -9,8 +9,8 @@ import { ModuleTreeProvider, ModuleTreeNode } from './moduleTreeProvider';
 import { Parser } from 'web-tree-sitter';
 import { VerilogDocumentSymbolProvider } from './documentSymbolProvider';
 import { createHoverProvider } from './hoverProvider';
+import { createDefinitionProvider } from './definitionProvider';
 import { disposeCache } from './verilogParser';
-
 
 let diagnosticCollection: vscode.DiagnosticCollection;
 let pendingTimeout: NodeJS.Timeout | undefined;
@@ -305,6 +305,12 @@ export async function activate(context: vscode.ExtensionContext) {
     const variablehoverProvider = createHoverProvider(parserInstance, srcScanner, simScanner, socScanner);
     context.subscriptions.push(
         vscode.languages.registerHoverProvider(['verilog', 'systemverilog'], variablehoverProvider)
+    );
+
+    // 注册定义提供器
+    const definitionProvider = createDefinitionProvider(parserInstance, srcScanner, simScanner, socScanner);
+    context.subscriptions.push(
+        vscode.languages.registerDefinitionProvider(['verilog', 'systemverilog'], definitionProvider)
     );
 
     // 文档事件
