@@ -19,6 +19,7 @@ export interface ParsedDocument {
     version: number;
     documentSymbols: vscode.DocumentSymbol[];
     symbols: SymbolInfo[];
+    rootNode: any;          // 新增，保存语法树根节点
     lastAccessTime: number;
 }
 
@@ -794,6 +795,7 @@ export async function getParsedDocument(document: vscode.TextDocument, parser: P
         version,
         documentSymbols: topLevelSymbols,
         symbols,
+        rootNode: tree.rootNode,
         lastAccessTime: Date.now()
     };
     cache.set(uri, parsed);

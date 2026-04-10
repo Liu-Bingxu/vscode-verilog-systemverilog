@@ -10,6 +10,7 @@ import { Parser } from 'web-tree-sitter';
 import { VerilogDocumentSymbolProvider } from './documentSymbolProvider';
 import { createHoverProvider } from './hoverProvider';
 import { createDefinitionProvider } from './definitionProvider';
+import { createCompletionProvider } from './completionProvider';
 import { disposeCache } from './verilogParser';
 
 let diagnosticCollection: vscode.DiagnosticCollection;
@@ -311,6 +312,83 @@ export async function activate(context: vscode.ExtensionContext) {
     const definitionProvider = createDefinitionProvider(parserInstance, srcScanner, simScanner, socScanner);
     context.subscriptions.push(
         vscode.languages.registerDefinitionProvider(['verilog', 'systemverilog'], definitionProvider)
+    );
+
+    // 注册补全提供器
+    const completionProvider = createCompletionProvider(parserInstance, srcScanner, simScanner, socScanner);
+    context.subscriptions.push(
+        vscode.languages.registerCompletionItemProvider(['verilog', 'systemverilog'], completionProvider, '.', 
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 
+        'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '_')
+    );
+
+    // 注册模块实例化命令（由补全项调用）
+    context.subscriptions.push(
+        vscode.commands.registerCommand('verilog.completeModuleInstantiation', async (moduleName: string, uriStr: string, line: number, startChar: number, endChar: number) => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) return;
+            if (editor.document.uri.toString() !== uriStr) return;
+            
+            // 删除用户已输入的单词
+            const range = new vscode.Range(line, startChar, line, endChar);
+            await editor.edit(editBuilder => {
+                editBuilder.delete(range);
+            });
+            
+            // 查找模块信息
+            let moduleInfo: ModuleInfo | undefined;
+            for (const scanner of [srcScanner, simScanner, socScanner]) {
+                const info = scanner.getModules().get(moduleName);
+                if (info && info.kind === 'module') {
+                    moduleInfo = info;
+                    break;
+                }
+            }
+            if (!moduleInfo) {
+                vscode.window.showErrorMessage(`Module ${moduleName} not found`);
+                return;
+            }
+            
+            // 生成实例化代码
+            const fileType = editor.document.languageId;
+            const cursorOffset = startChar; // 删除后光标位置
+            const instantiationCode = generateInstantiation(moduleInfo, fileType, cursorOffset);
+            const position = new vscode.Position(line, startChar);
+            await editor.edit(editBuilder => {
+                editBuilder.insert(position, instantiationCode);
+            });
+        })
+    );
+
+    // 插入端口/参数连接的命令
+    context.subscriptions.push(
+        vscode.commands.registerCommand('verilog.insertPortConnection', async (uriStr: string, replaceRange: vscode.Range, itemName: string, allNames: string[]) => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) return;
+            if (editor.document.uri.toString() !== uriStr) return;
+
+            // 计算最大名称长度（用于左括号）和最大值长度（用于右括号，这里值就是名称本身）
+            const maxNameLen = Math.max(...allNames.map(n => n.length));
+            const maxValueLen = maxNameLen;
+            
+            const dotColumn = replaceRange.start.character;
+            const dotName = `.${itemName}`;
+            const minLeftParen = dotColumn + maxNameLen + 2; // 基于最大名称长度
+            const leftParenCol = Math.ceil(minLeftParen / 4) * 4;
+            const spacesBeforeParen = leftParenCol - (dotColumn + dotName.length);
+            
+            const valueStr = itemName;
+            // 左括号实际列是 leftParenCol，括号内一个空格，然后 value，再一个空格，再右括号
+            const minRightParen = leftParenCol + 1 + 1 + maxValueLen + 1; // 基于最大 value 长度
+            const rightParenCol = Math.ceil(minRightParen / 4) * 4;
+            const spacesAfterValue = rightParenCol - (leftParenCol + 1 + valueStr.length + 1);
+            
+            const connection = `${dotName}${' '.repeat(spacesBeforeParen)}( ${valueStr}${' '.repeat(spacesAfterValue)} )`;
+            
+            await editor.edit(editBuilder => {
+                editBuilder.replace(replaceRange, connection);
+            });
+        })
     );
 
     // 文档事件
