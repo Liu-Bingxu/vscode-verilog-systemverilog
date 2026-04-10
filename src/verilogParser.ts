@@ -1,38 +1,35 @@
 import * as vscode from 'vscode';
 import { Parser } from 'web-tree-sitter';
 
-// 符号信息（用于悬停和定义）
 export interface SymbolInfo {
     name: string;
-    kind: 'port' | 'param' | 'signal';
-    direction?: string;      // 仅端口
-    type?: string;           // 数据类型
-    packedWidth?: string;    // 打包维度，如 [7:0]
-    unpackedWidth?: string;  // 解包维度，如 [15:0]
-    value?: string;          // 参数默认值
+    kind: 'port' | 'param' | 'signal' | 'task' | 'function';
+    direction?: string;
+    type?: string;
+    packedWidth?: string;
+    unpackedWidth?: string;
+    value?: string;
     line: number;
     column: number;
     file: string;
 }
 
-// 解析后的文档内容
 export interface ParsedDocument {
     uri: string;
     version: number;
-    documentSymbols: vscode.DocumentSymbol[];  // 大纲符号树
-    symbols: SymbolInfo[];                     // 扁平符号列表（用于悬停/定义）
+    documentSymbols: vscode.DocumentSymbol[];
+    symbols: SymbolInfo[];
     lastAccessTime: number;
 }
 
-// 缓存管理器
 class DocumentCache {
     private cache = new Map<string, ParsedDocument>();
     private cleanupTimer: NodeJS.Timeout;
-    private readonly maxAge: number; // 毫秒
+    private readonly maxAge: number;
 
-    constructor(maxAgeMs: number = 5 * 60 * 1000) { // 默认5分钟
+    constructor(maxAgeMs: number = 5 * 60 * 1000) {
         this.maxAge = maxAgeMs;
-        this.cleanupTimer = setInterval(() => this.cleanup(), 60 * 1000); // 每分钟检查一次
+        this.cleanupTimer = setInterval(() => this.cleanup(), 60 * 1000);
     }
 
     private cleanup() {
@@ -63,10 +60,8 @@ class DocumentCache {
     }
 }
 
-// 全局缓存实例
 const cache = new DocumentCache();
 
-// 辅助函数
 function findChild(node: any, type: string): any {
     return node.children?.find((c: any) => c.type === type);
 }
@@ -87,8 +82,8 @@ function getGenerateBlockLabel(generateBlockNode: any): string {
     return '';
 }
 
-// 收集大纲符号（递归构建 DocumentSymbol 树）
-function collectDocumentSymbols(node: any, parentSymbol: vscode.DocumentSymbol | null, symbols: vscode.DocumentSymbol[], topLevelSymbols: vscode.DocumentSymbol[]) {
+// ---------- 大纲符号收集 ----------
+function collectDocumentSymbols(node: any, parentSymbol: vscode.DocumentSymbol | null, topLevelSymbols: vscode.DocumentSymbol[]) {
     let symbolKind: vscode.SymbolKind | undefined;
     let name = '';
     let range: vscode.Range | undefined;
@@ -136,10 +131,7 @@ function collectDocumentSymbols(node: any, parentSymbol: vscode.DocumentSymbol |
         const body = findChild(node, 'task_body_declaration');
         if (body) {
             const nameNode = findChild(body, 'task_identifier');
-            if (nameNode) {
-                const simpleId = findChild(nameNode, 'simple_identifier');
-                if (simpleId) name = simpleId.text;
-            }
+            if (nameNode) name = nameNode.text;
         }
         range = nodeToRange(node);
         selectionRange = nodeToRange(node);
@@ -150,10 +142,7 @@ function collectDocumentSymbols(node: any, parentSymbol: vscode.DocumentSymbol |
         const body = findChild(node, 'function_body_declaration');
         if (body) {
             const nameNode = findChild(body, 'function_identifier');
-            if (nameNode) {
-                const simpleId = findChild(nameNode, 'simple_identifier');
-                if (simpleId) name = simpleId.text;
-            }
+            if (nameNode) name = nameNode.text;
         }
         range = nodeToRange(node);
         selectionRange = nodeToRange(node);
@@ -235,9 +224,38 @@ function collectDocumentSymbols(node: any, parentSymbol: vscode.DocumentSymbol |
         range = nodeToRange(node);
         selectionRange = nodeToRange(node);
     }
+    // 任务内部的端口（tf_port_item1）作为子符号
+    else if (node.type === 'tf_port_item1' && parentSymbol && (parentSymbol.kind === vscode.SymbolKind.Method)) {
+        symbolKind = vscode.SymbolKind.Field;
+        const portIdNode = findChild(node, 'port_identifier');
+        if (portIdNode) {
+            const simpleId = findChild(portIdNode, 'simple_identifier');
+            if (simpleId) name = simpleId.text;
+        }
+        if (name) {
+            range = nodeToRange(node);
+            selectionRange = nodeToRange(portIdNode || node);
+        }
+    }
+    // 函数内部的端口（tf_port_declaration）作为子符号
+    else if (node.type === 'tf_port_declaration' && parentSymbol && (parentSymbol.kind === vscode.SymbolKind.Function)) {
+        const portIdNode = findChild(node, 'list_of_tf_variable_identifiers');
+        for (const port_name of portIdNode.children) {
+            const simpleId = findChild(port_name, 'simple_identifier');
+            if (simpleId) {
+                const symName = simpleId.text;
+                const symKind = vscode.SymbolKind.Field;
+                const symRange = nodeToRange(node);
+                const symSelection = nodeToRange(simpleId);
+                const symbol = new vscode.DocumentSymbol(symName, '', symKind, symRange, symSelection);
+                parentSymbol.children.push(symbol);
+            }
+        }
+        return;
+    }
     // 参数声明（包括模块头部参数和内部 parameter_declaration / local_parameter_declaration）
     else if ((node.type === 'parameter_declaration' || node.type === 'local_parameter_declaration') && parentSymbol) {
-        if (parentSymbol.kind === vscode.SymbolKind.Module || parentSymbol.kind === vscode.SymbolKind.Namespace) {
+        if (parentSymbol.kind === vscode.SymbolKind.Module || parentSymbol.kind === vscode.SymbolKind.Namespace || parentSymbol.kind === vscode.SymbolKind.Package) {
             const listNode = findChild(node, 'list_of_param_assignments');
             if (listNode) {
                 const paramAssigns = listNode.children.filter((c: any) => c.type === 'param_assignment');
@@ -256,12 +274,12 @@ function collectDocumentSymbols(node: any, parentSymbol: vscode.DocumentSymbol |
                     }
                 }
             }
-            return; // 已处理子节点
+            return;
         }
     }
-    // 数据声明（wire/reg/logic）
+    // 数据声明（wire/reg/logic）作为模块、接口、包或 generate 块的子符号
     else if (node.type === 'data_declaration' && parentSymbol) {
-        if (parentSymbol.kind === vscode.SymbolKind.Module || parentSymbol.kind === vscode.SymbolKind.Namespace) {
+        if (parentSymbol.kind === vscode.SymbolKind.Module || parentSymbol.kind === vscode.SymbolKind.Interface || parentSymbol.kind === vscode.SymbolKind.Package || parentSymbol.kind === vscode.SymbolKind.Namespace) {
             const listNode = findChild(node, 'list_of_variable_decl_assignments');
             if (listNode) {
                 const decls = listNode.children.filter((c: any) => c.type === 'variable_decl_assignment');
@@ -276,8 +294,8 @@ function collectDocumentSymbols(node: any, parentSymbol: vscode.DocumentSymbol |
                         parentSymbol.children.push(symbol);
                     }
                 }
+                return;
             }
-            return;
         }
     }
     // genvar 声明
@@ -301,9 +319,9 @@ function collectDocumentSymbols(node: any, parentSymbol: vscode.DocumentSymbol |
             return;
         }
     }
-    // 自定义类型声明（net_declaration）
+    // 自定义类型声明（net_declaration）作为模块、接口或包的子符号
     else if (node.type === 'net_declaration' && parentSymbol) {
-        if (parentSymbol.kind === vscode.SymbolKind.Module || parentSymbol.kind === vscode.SymbolKind.Namespace) {
+        if (parentSymbol.kind === vscode.SymbolKind.Module || parentSymbol.kind === vscode.SymbolKind.Interface || parentSymbol.kind === vscode.SymbolKind.Package || parentSymbol.kind === vscode.SymbolKind.Namespace) {
             const listNode = findChild(node, 'list_of_net_decl_assignments');
             if (listNode) {
                 const decls = listNode.children.filter((c: any) => c.type === 'net_decl_assignment');
@@ -322,6 +340,19 @@ function collectDocumentSymbols(node: any, parentSymbol: vscode.DocumentSymbol |
             return;
         }
     }
+    // typedef 类型声明（作为包的子符号）
+    else if (node.type === 'type_declaration' && parentSymbol) {
+        const nameNode = findChild(node, 'simple_identifier');
+        if (nameNode) {
+            const symName = nameNode.text;
+            const symKind = vscode.SymbolKind.TypeParameter;
+            const symRange = nodeToRange(node);
+            const symSelection = nodeToRange(nameNode);
+            const symbol = new vscode.DocumentSymbol(symName, '', symKind, symRange, symSelection);
+            parentSymbol.children.push(symbol);
+            return;
+        }
+    }
     // generate 区域
     else if (node.type === 'generate_region' && parentSymbol && parentSymbol.kind === vscode.SymbolKind.Module) {
         symbolKind = vscode.SymbolKind.Namespace;
@@ -335,7 +366,7 @@ function collectDocumentSymbols(node: any, parentSymbol: vscode.DocumentSymbol |
             topLevelSymbols.push(generateSymbol);
         }
         for (const child of node.children) {
-            collectDocumentSymbols(child, generateSymbol, symbols, topLevelSymbols);
+            collectDocumentSymbols(child, generateSymbol, topLevelSymbols);
         }
         return;
     }
@@ -348,9 +379,8 @@ function collectDocumentSymbols(node: any, parentSymbol: vscode.DocumentSymbol |
             range = nodeToRange(node);
             selectionRange = nodeToRange(node);
         } else {
-            // 无标签的 generate_block 不创建符号，但继续递归
             for (const child of node.children) {
-                collectDocumentSymbols(child, parentSymbol, symbols, topLevelSymbols);
+                collectDocumentSymbols(child, parentSymbol, topLevelSymbols);
             }
             return;
         }
@@ -364,16 +394,16 @@ function collectDocumentSymbols(node: any, parentSymbol: vscode.DocumentSymbol |
             topLevelSymbols.push(symbol);
         }
         for (const child of node.children) {
-            collectDocumentSymbols(child, symbol, symbols, topLevelSymbols);
+            collectDocumentSymbols(child, symbol, topLevelSymbols);
         }
     } else {
         for (const child of node.children) {
-            collectDocumentSymbols(child, parentSymbol, symbols, topLevelSymbols);
+            collectDocumentSymbols(child, parentSymbol, topLevelSymbols);
         }
     }
 }
 
-// 收集悬停/定义用的符号列表
+// ---------- 悬停/定义符号收集 ----------
 function collectSymbolInfo(node: any, filePath: string, symbols: SymbolInfo[]) {
     // 1. 端口声明
     if (node.type === 'module_ansi_header') {
@@ -436,7 +466,7 @@ function collectSymbolInfo(node: any, filePath: string, symbols: SymbolInfo[]) {
     }
 
     // 2. 模块参数（parameter_port_list）
-    if (node.type === 'parameter_port_list') {
+    else if (node.type === 'parameter_port_list') {
         const paramDecls = node.children.filter((c: any) => c.type === 'parameter_port_declaration');
         for (const decl of paramDecls) {
             let paramDeclNode = findChild(decl, 'parameter_declaration') || findChild(decl, 'local_parameter_declaration');
@@ -468,8 +498,8 @@ function collectSymbolInfo(node: any, filePath: string, symbols: SymbolInfo[]) {
         }
     }
 
-    // 3. 内部数据声明
-    if (node.type === 'data_declaration') {
+    // 3. 内部数据声明（data_declaration）
+    else if (node.type === 'data_declaration') {
         let dataType = '';
         let packedWidth = '';
         const dataTypeOrImplicit = findChild(node, 'data_type_or_implicit1');
@@ -518,7 +548,7 @@ function collectSymbolInfo(node: any, filePath: string, symbols: SymbolInfo[]) {
     }
 
     // 4. 参数声明（parameter_declaration）
-    if (node.type === 'parameter_declaration') {
+    else if (node.type === 'parameter_declaration') {
         const listNode = findChild(node, 'list_of_param_assignments');
         if (listNode) {
             const paramAssigns = listNode.children.filter((c: any) => c.type === 'param_assignment');
@@ -544,8 +574,8 @@ function collectSymbolInfo(node: any, filePath: string, symbols: SymbolInfo[]) {
         }
     }
 
-    // 5. 局部参数声明
-    if (node.type === 'local_parameter_declaration') {
+    // 5. 局部参数声明（local_parameter_declaration）
+    else if (node.type === 'local_parameter_declaration') {
         const listNode = findChild(node, 'list_of_param_assignments');
         if (listNode) {
             const paramAssigns = listNode.children.filter((c: any) => c.type === 'param_assignment');
@@ -572,7 +602,7 @@ function collectSymbolInfo(node: any, filePath: string, symbols: SymbolInfo[]) {
     }
 
     // 6. genvar 声明
-    if (node.type === 'genvar_declaration') {
+    else if (node.type === 'genvar_declaration') {
         const listNode = findChild(node, 'list_of_genvar_identifiers');
         if (listNode) {
             const ids = listNode.children.filter((c: any) => c.type === 'genvar_identifier');
@@ -594,8 +624,8 @@ function collectSymbolInfo(node: any, filePath: string, symbols: SymbolInfo[]) {
         }
     }
 
-    // 7. 自定义类型声明
-    if (node.type === 'net_declaration') {
+    // 7. 自定义类型声明（net_declaration）
+    else if (node.type === 'net_declaration') {
         const typeNode = findChild(node, 'simple_identifier');
         let dataType = typeNode ? typeNode.text : 'wire';
         const listNode = findChild(node, 'list_of_net_decl_assignments');
@@ -622,13 +652,119 @@ function collectSymbolInfo(node: any, filePath: string, symbols: SymbolInfo[]) {
         }
     }
 
+    //! TODO: 完善这里的解析，由于task并不常用，暂不完善
+    // 8. 任务/函数内部的端口（tf_port_item1）
+    else if (node.type === 'tf_port_item1') {
+        let direction = '';
+        const dirNode = findChild(node, 'tf_port_direction');
+        if (dirNode) {
+            const dirChild = dirNode.children.find((c: any) => c.type === 'input' || c.type === 'output' || c.type === 'inout');
+            if (dirChild) direction = dirChild.type;
+        }
+        const portIdNode = findChild(node, 'port_identifier');
+        if (portIdNode) {
+            const simpleId = findChild(portIdNode, 'simple_identifier');
+            if (simpleId) {
+                symbols.push({
+                    name: simpleId.text,
+                    kind: 'port', // 复用 port 类型
+                    direction,
+                    type: '',
+                    packedWidth: '',
+                    unpackedWidth: '',
+                    line: simpleId.startPosition.row,
+                    column: simpleId.startPosition.column,
+                    file: filePath
+                });
+            }
+        }
+    }
+
+    //! TODO: 完善这里的解析，由于function并不常用，暂不完善
+    // 9. 任务/函数内部的变量声明（tf_item_declaration 中的 list_of_tf_variable_identifiers）
+    else if (node.type === 'tf_item_declaration') {
+        const listNode = findChild(node, 'list_of_tf_variable_identifiers');
+        if (listNode) {
+            const ids = listNode.children.filter((c: any) => c.type === 'port_identifier');
+            for (const idNode of ids) {
+                const simpleId = findChild(idNode, 'simple_identifier');
+                if (simpleId) {
+                    symbols.push({
+                        name: simpleId.text,
+                        kind: 'signal',
+                        type: 'wire', // 默认
+                        packedWidth: '',
+                        unpackedWidth: '',
+                        line: simpleId.startPosition.row,
+                        column: simpleId.startPosition.column,
+                        file: filePath
+                    });
+                }
+            }
+        }
+    }
+
+    // 10. 包内的类型声明（typedef）
+    else if (node.type === 'type_declaration') {
+        const nameNode = findChild(node, 'simple_identifier');
+        if (nameNode) {
+            symbols.push({
+                name: nameNode.text,
+                kind: 'param', // 复用 param 表示类型别名
+                type: 'typedef',
+                value: '',
+                line: nameNode.startPosition.row,
+                column: nameNode.startPosition.column,
+                file: filePath
+            });
+        }
+    }
+
+    // 11. 任务声明
+    else if (node.type === 'task_declaration') {
+        const body = findChild(node, 'task_body_declaration');
+        if (body) {
+            const nameNode = findChild(body, 'task_identifier');
+            if (nameNode) {
+                symbols.push({
+                    name: nameNode.text,
+                    kind: 'task',
+                    type: 'task',
+                    value: '',
+                    line: nameNode.startPosition.row,
+                    column: nameNode.startPosition.column,
+                    file: filePath
+                });
+            }
+        }
+    }
+
+    // 12. 函数声明
+    else if (node.type === 'function_declaration') {
+        const body = findChild(node, 'function_body_declaration');
+        if (body) {
+            const nameNode = findChild(body, 'function_identifier');
+            if (nameNode) {
+                symbols.push({
+                    name: nameNode.text,
+                    kind: 'function',
+                    type: 'function',
+                    value: '',
+                    line: nameNode.startPosition.row,
+                    column: nameNode.startPosition.column,
+                    file: filePath
+                });
+            }
+        }
+    }
+
     // 递归子节点
     for (const child of node.children) {
         collectSymbolInfo(child, filePath, symbols);
     }
 }
 
-// 解析文档并构建缓存
+// ---------- 对外接口 ----------
 export async function getParsedDocument(document: vscode.TextDocument, parser: Parser): Promise<ParsedDocument> {
     const uri = document.uri.toString();
     const version = document.version;
@@ -638,7 +774,6 @@ export async function getParsedDocument(document: vscode.TextDocument, parser: P
     }
 
     let text = document.getText();
-    // 预处理：移除 static_assert 和 $error 行，避免解析器出错
     text = text.replace(/^\s*static_assert\s*\([^;]*\)\s*;/gm, '// static_assert(...)');
     text = text.replace(/^\s*\$error\s*\([^;]*\)\s*;/gm, '// $error(...)');
 
@@ -647,11 +782,9 @@ export async function getParsedDocument(document: vscode.TextDocument, parser: P
         throw new Error('Failed to parse document');
     }
 
-    // 收集大纲符号
     const topLevelSymbols: vscode.DocumentSymbol[] = [];
-    collectDocumentSymbols(tree.rootNode, null, topLevelSymbols, topLevelSymbols);
+    collectDocumentSymbols(tree.rootNode, null, topLevelSymbols);
 
-    // 收集悬停/定义符号
     const symbols: SymbolInfo[] = [];
     const filePath = document.uri.fsPath;
     collectSymbolInfo(tree.rootNode, filePath, symbols);
@@ -667,7 +800,6 @@ export async function getParsedDocument(document: vscode.TextDocument, parser: P
     return parsed;
 }
 
-// 释放缓存（可选，用于插件 deactivate 时）
 export function disposeCache() {
     cache.dispose();
 }
