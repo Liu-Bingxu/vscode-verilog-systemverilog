@@ -9,6 +9,7 @@ import { ModuleTreeProvider, ModuleTreeNode } from './moduleTreeProvider';
 import { Parser } from 'web-tree-sitter';
 import { VerilogDocumentSymbolProvider } from './documentSymbolProvider';
 import { createHoverProvider } from './hoverProvider';
+import { disposeCache } from './verilogParser';
 
 
 let diagnosticCollection: vscode.DiagnosticCollection;
@@ -682,4 +683,5 @@ export function deactivate() {
     if (srcScanner) srcScanner.stop();
     if (simScanner) simScanner.stop();
     if (socScanner) socScanner.stop();
+    disposeCache();
 }
