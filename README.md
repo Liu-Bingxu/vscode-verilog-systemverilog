@@ -4,14 +4,17 @@ This extension provides comprehensive support for Verilog and SystemVerilog deve
 
 - ✅ Syntax highlighting (TextMate grammar)
 - ✅ Code snippets
-- ✅ Real-time linting with Verilator (with cross‑file diagnostics)
+- ✅ Real-time linting with Verilator (SARIF‑based, with cross‑file diagnostics)
 - ✅ **Three independent module dependency tree views** (Source, Simulation, SoC)
-- ✅ **Module instantiation assistant** with configurable formatting
+- ✅ **Module instantiation assistant** (command palette + autocompletion)
 - ✅ **Cyclic dependency detection** and reporting
 - ✅ **Duplicate module/package/interface definition detection**
 - ✅ **Incremental scanning** (only re‑parse changed files)
 - ✅ **Persistent dependency cache** (speeds up reload)
-- ✅ **Hover information** for Verilator warning/error codes
+- ✅ **Hover information** for signals, ports, parameters, and Verilator warnings/errors
+- ✅ **Document symbols outline** (modules, interfaces, tasks, functions, generate blocks, etc.)
+- ✅ **Go to definition** for modules, ports, parameters, and local signals
+- ✅ **Autocompletion** for module names (with instantiation), ports, and parameters
 
 ## Features
 
@@ -40,14 +43,14 @@ Each view is independently configurable and can be refreshed with a button in th
 
 ### 2. Module Instantiation Assistant
 
-When you right‑click in a Verilog/SystemVerilog file and select **Verilog: Instantiate Module** (or use the command palette), the extension will:
+You can instantiate a module in two ways:
 
-- Present a quick‑pick list of all modules available in the **current view** (Source/Simulation/SoC).
-- Once you select a module, it generates a fully formatted instantiation template, inserted at the cursor position.
+- **Via command palette or context menu** – select a module from a quick‑pick list, and a fully formatted instantiation template is inserted at the cursor.
+- **Via autocompletion** – start typing the module name, choose from the dropdown, and the instantiation is generated automatically.
 
 **Generated code includes:**
 
-- `localparam` declarations for each parameter (using the parameter’s own name as default value).
+- `localparam` declarations for each parameter (using the parameter’s default value if available, otherwise the parameter name).
 - Declarations for all **output** ports, with proper type and width alignment (aligned to multiples of 4 columns).
 - A comment `// output from u_<module>` before the output declarations.
 - A correctly formatted instantiation with:
@@ -57,21 +60,56 @@ When you right‑click in a Verilog/SystemVerilog file and select **Verilog: Ins
 
 The alignment respects the column of the cursor, so the code blends seamlessly with your existing indentation.
 
-### 3. Cyclic Dependency Detection
+### 3. Autocompletion
+
+- **Module name completion** – triggered as you type letters. Select a module to instantly generate a full instantiation.
+- **Port and parameter completion** – after typing `.` inside a module instantiation (e.g., `u_module .`), a list of all ports (or parameters if inside `#(...)`) appears. Choosing an item inserts a correctly aligned connection line (e.g., `.port( port )`). The alignment is based on the longest port/parameter name and value to keep all connections neatly aligned.
+
+### 4. Document Symbols Outline
+
+The Outline view (Ctrl+Shift+O) shows all structural elements of the current file:
+
+- Modules, interfaces, packages
+- Tasks and functions
+- Generate blocks (named generate regions)
+- Ports, parameters, local signals (wire/reg/logic), and genvars
+- Instantiations (module, interface, checker)
+- Package imports and typedefs
+
+Clicking any symbol jumps to its declaration.
+
+### 5. Hover Information
+
+Hover over any identifier to see:
+
+- For signals (ports, wires, regs, logic, genvars): type and packed/unpacked dimensions.
+- For parameters: parameter kind (`parameter` or `localparam`) and its default value.
+- For modules (when hovering an instance name): the module name and the file where it is defined.
+- For Verilator diagnostics: a detailed description of the warning/error code.
+
+### 6. Go to Definition
+
+Hold Ctrl (or Cmd) and click on:
+
+- **Module instance name** – jumps to the module definition (cross‑file).
+- **Port, parameter, or local signal** – jumps to its declaration within the same file.
+- **Task or function name** – jumps to its definition.
+
+### 7. Cyclic Dependency Detection
 
 The scanner builds a directed graph of module instantiations and detects cycles. When a cycle is found:
 
 - A warning appears in the **Verilog Cyclic Dependencies** output channel (one per view).
 - All modules in the cycle are marked with a warning icon in the tree view.
 
-### 4. Duplicate Definition Detection
+### 8. Duplicate Definition Detection
 
 If the same module, package, or interface is defined in more than one file:
 
 - Error diagnostics are added to **each** definition location, pointing to the other definition(s).
 - The duplicates are listed in the **Verilog Duplicate Definitions** output channel.
 
-### 5. Incremental Scanning & Persistent Cache
+### 9. Incremental Scanning & Persistent Cache
 
 The scanner monitors files in the configured folders and re‑parses only those that have changed.
 
@@ -80,17 +118,19 @@ The scanner monitors files in the configured folders and re‑parses only those 
 - On next workspace load, the cache is loaded immediately, so the tree views appear instantly. A background scan then verifies if any file changed and updates accordingly.
 - You can disable caching or choose whether to be asked before creating the cache file.
 
-### 6. Verilator Linting
+### 10. Verilator Linting
 
-The extension can run Verilator in **--lint-only** mode on your Verilog/SystemVerilog files.
+The extension runs Verilator in **--lint-only** mode using the **SARIF** output format, which provides precise source locations and eliminates the need for brittle text parsing.
 
 - **Trigger modes:** `onSave` or `onType` (configurable).
-- **Diagnostics** (errors/warnings) appear as squiggles in the editor.
-- **Hover** over a diagnostic to see a description of the error/warning code (e.g., `%Warning-WIDTH` → detailed explanation).
+- **Diagnostics** (errors/warnings) appear as squiggles in the editor, covering the exact range of the relevant identifier.
+- **Hover** over a diagnostic to see a detailed description of the error/warning code (e.g., `%Warning-WIDTH` → detailed explanation).
 - **Cross‑file diagnostics** (enabled by default): all files mentioned in the lint output receive diagnostics, even if they are not currently open.
 - **Clear before lint** (enabled by default): previous diagnostics are cleared before each lint run, avoiding stale markers.
 
-### 7. Configuration Options
+### 11. Configuration Options
+
+All settings can be changed in VS Code’s settings UI or in `settings.json`.
 
 | Setting | Description | Default |
 |---------|-------------|---------|
@@ -125,12 +165,16 @@ In your workspace settings (`.vscode/settings.json`), define the source, simulat
 }
 ```
 
-### Instantiate a module
+### Instantiate a module via autocompletion
 
-1. Place the cursor where you want the instantiation.
-2. Right‑click → **Verilog: Instantiate Module (Source)** (or use the command palette).
-3. Select a module from the list.
-4. The formatted code is inserted, respecting the cursor column.
+1. Start typing a module name (e.g., `cou`). A dropdown with matching modules appears.
+2. Select the desired module (e.g., `counter`). The full instantiation code is inserted, replacing the typed prefix.
+3. The generated code includes parameters, output declarations, and a correctly aligned instance.
+
+### Use port autocompletion
+
+1. After an instance name, type a dot and a space (e.g., `u_counter .`). A list of all ports appears.
+2. Select a port (e.g., `clk`). A properly aligned connection line `.clk( clk )` is inserted, aligned with existing connections.
 
 ### Set a top module
 
@@ -148,7 +192,7 @@ The **Verilog Duplicate Definitions** output channel lists all duplicate names a
 
 ## Requirements
 
-- **Verilator** (version 4.0 or later) must be installed and accessible from the command line.
+- **Verilator** (version 5.008 or later, because SARIF output is used) must be installed and accessible from the command line.
 
   - Linux: `sudo apt install verilator`
   - macOS: `brew install verilator`
@@ -165,23 +209,27 @@ The **Verilog Duplicate Definitions** output channel lists all duplicate names a
 | `verilog.setAsTopSrc` | Set the selected module as top (Source view) |
 | `verilog.setAsTopSim` | Set the selected module as top (Simulation view) |
 | `verilog.setAsTopSoc` | Set the selected module as top (SoC view) |
-| `verilog.instantiateSrcModule` | Instantiate a module from the Source view |
-| `verilog.instantiateSimModule` | Instantiate a module from the Simulation view |
-| `verilog.instantiateSocModule` | Instantiate a module from the SoC view |
+| `verilog.instantiateSrcModule` | Instantiate a module from the Source view (manual pick) |
+| `verilog.instantiateSimModule` | Instantiate a module from the Simulation view (manual pick) |
+| `verilog.instantiateSocModule` | Instantiate a module from the SoC view (manual pick) |
 
-All commands are available from the command palette (`Ctrl+Shift+P`), and instantiation commands also appear in the context menu of the editor.
+All commands are available from the command palette (`Ctrl+Shift+P`). Instantiation commands also appear in the context menu of the editor, and module autocompletion is integrated into the editor.
 
 ## Known Limitations
 
-- **Regular expression fallback** is limited – it only captures module names and simple instantiations, without parameters, ports, or package imports.
+- **Regular expression fallback** is limited – it only captures module names and simple instantiations, without parameters, ports, or package imports. It is only used when tree‑sitter parsing fails.
 - **Tree‑sitter parser** is required for full functionality (parameter/port extraction, package import resolution, interface instantiation). The parser is included in the extension (the WASM file is inside `syntaxes/`).
-- **Custom types** (e.g., `typedef struct`) are not yet analyzed; they appear as simple types in ports.
-- **Linting** only runs on the currently edited file, but can propagate diagnostics to other files if cross‑file diagnostics is enabled.
+- **Custom types** (e.g., `typedef struct`) are not yet fully analyzed; they appear as simple types in ports.
+- **Linting** uses the SARIF output format, which requires Verilator 5.008 or later. If an older Verilator is used, the linting will fall back to text parsing (which may be less accurate).
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or pull request on [GitHub](https://github.com/your-username/vscode-verilog-full).
+Contributions are welcome! Please open an issue or pull request on [GitHub](https://github.com/Liu-Bingxu/vscode-verilog-systemverilog).
 
 ## License
 
 [MIT](LICENSE)
+
+---
+
+**Enjoy productive Verilog/SystemVerilog development!**

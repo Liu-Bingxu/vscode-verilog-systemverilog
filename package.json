@@ -2,7 +2,7 @@
     "name": "vscode-verilog-full",
     "displayName": "Verilog/SystemVerilog Full Support",
     "description": "Syntax highlighting, snippets, and Verilator lint for Verilog and SystemVerilog",
-    "version": "0.4.1",
+    "version": "0.4.2",
     "publisher": "LiuBingxu",
     "repository": {
         "type": "git",
