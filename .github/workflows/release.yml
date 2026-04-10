@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'   # 当推送的标签以 'v' 开头时触发，例如 v0.4.0
+
+permissions:
+  contents: write  # 赋予创建工作流写入权限，用于创建 Release[reference:11]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Package VS Code Extension
+        run: npx vsce package --no-dependencies
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./*.vsix       # 上传所有生成的 .vsix 文件
+          generate_release_notes: true  # 自动生成更新日志
